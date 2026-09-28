@@ -40,15 +40,6 @@
                 ]
             }
         ],
-        "extraResources": [
-            {
-                "from": "resources/sumatra",
-                "to": "sumatra",
-                "filter": [
-                    "**/*"
-                ]
-            }
-        ],
         "win": {
             "target": [
                 {

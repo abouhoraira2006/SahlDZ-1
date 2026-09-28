@@ -259,8 +259,10 @@ ipcMain.handle("print-ticket", async (event, opts) => {
     await win.loadFile(htmlPath);
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
-      pageSize: "A4",
-      margins: { marginType: "custom", top: 0.2, bottom: 0.2, left: 0.2, right: 0.2 },
+      // The ticket CSS declares `@page { size: 80mm auto; margin: 4mm }` for the
+      // thermal roll. An explicit pageSize would override that and render the
+      // ticket onto A4, so the CSS must drive the paper size and margin.
+      preferCSSPageSize: true,
     });
     fs.writeFileSync(pdfPath, pdf);
 
