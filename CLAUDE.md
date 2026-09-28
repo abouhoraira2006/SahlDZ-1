@@ -57,3 +57,36 @@ Preview/demo routes work without a configured backend: `/waiter-login`, `/kitche
 - Composite indexes are declared in `firestore.indexes.json` (categories, menu_items, supplier_transactions, staff_transactions, employee_salary_payments, etc.).
 - They must be deployed to the live project for fast filtered queries: `firebase deploy --only firestore:indexes --project sahldz-app`.
 - Until deployed, the Supabase-compatible Firebase adapter (`src/integrations/firebase/client.ts`) transparently falls back to client-side filtering when Firestore returns an index-required error.
+
+## Desktop app (Windows 7 compatibility — do not break this)
+
+The cashier/kitchen terminals in the restaurants still run **Windows 7 SP1**, so the
+Electron shell is pinned to the last Win7-safe release.
+
+- **Electron is pinned to `22.3.27` in `desktop/package.json`. DO NOT upgrade it.**
+  Electron **23 and newer hard-import `KERNEL32!DiscardVirtualMemory`**, which only
+  exists on Windows 10 1803+ / Server 2019. On Win7 the Windows loader aborts before
+  any window appears, with:
+  `SahlDZ.exe - Point d'entrée introuvable ... DiscardVirtualMemory ... KERNEL32.dll`
+- The build is also pinned to **ia32 (x86)**, configured inline in the `"build"` field of
+  `desktop/package.json` (`win.target[].arch: ["ia32"]`). There is no `electron-builder.yml`.
+  ia32 is the safest choice for 32-bit Win7 machines; x64 also works but only on x64 hosts.
+- `desktop/build.bat` enforces both rules: it refuses to build if the pinned Electron is
+  `> 22`, wipes previous `release*` output first, and finishes by running
+  `node scripts/check-win7-compat.cjs desktop/release-build/win-ia32-unpacked`, which parses
+  the PE import tables and fails the build on any Win10-only hard import. Run that script
+  manually after any build that bypasses `build.bat`.
+- **Known trap:** stale `release*/win-unpacked` (x64) folders used to sit next to the
+  correct `win-ia32-unpacked`. Shipping the wrong one reintroduces the crash. Only
+  `release-build/SahlDZ Setup *.exe` is shippable.
+- Release notes: the shipped 1.0.0 x64 installer was built with **Electron 28.3.3** and is
+  the origin of the crash; 1.0.1 is the first correct Win7 build.
+- `autoUpdater` is gated off on Windows < 10 (`UPDATES_ENABLED` in `desktop/main.js`), and
+  the generic feed `https://sahldz.com/updates` currently returns 404 — so publish
+  `latest.yml` + the installer there before enabling updates on modern machines.
+- If `github.com` release downloads time out during `npm install` (Electron postinstall),
+  set `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`.
+- **Release gate:** before handing any build to the client, install it on a real
+  Windows 7 SP1 VM with updates through 2020 and confirm it launches. The static import
+  check is necessary but not sufficient.
+

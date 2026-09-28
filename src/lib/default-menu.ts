@@ -3,6 +3,8 @@
 // can quickly fill an empty menu. Images are committed under public/food/
 // so they always render without any network dependency.
 
+import { MAIN_HALL_NAME } from "@/lib/halls";
+
 export type DefaultOptionChoice = {
   id: string;
   name: string;
@@ -423,6 +425,20 @@ export const DEFAULT_MENU_ITEMS: DefaultMenuItem[] = [
 
 // Map preview menu to the cashier component's expected shape.
 export function buildDefaultCashierMenu() {
+  const previewHalls = [
+    { id: "main", name: MAIN_HALL_NAME, table_count: 5 },
+    { id: "vip", name: "قاعة VIP", table_count: 3 },
+  ];
+  const previewTables = [
+    { id: "t1", table_number: 1, hall_id: "main" },
+    { id: "t2", table_number: 2, hall_id: "main" },
+    { id: "t3", table_number: 3, hall_id: "main" },
+    { id: "t4", table_number: 4, hall_id: "main" },
+    { id: "t5", table_number: 5, hall_id: "main" },
+    { id: "t6", table_number: 1, hall_id: "vip" },
+    { id: "t7", table_number: 2, hall_id: "vip" },
+    { id: "t8", table_number: 3, hall_id: "vip" },
+  ];
   return {
     categories: DEFAULT_CATEGORIES,
     items: DEFAULT_MENU_ITEMS.map((i) => ({
@@ -434,16 +450,11 @@ export function buildDefaultCashierMenu() {
       image_url: i.image_url,
       is_available: i.is_available,
     })),
-    tables: [
-      { id: "t1", table_number: 1 },
-      { id: "t2", table_number: 2 },
-      { id: "t3", table_number: 3 },
-      { id: "t4", table_number: 4 },
-      { id: "t5", table_number: 5 },
-      { id: "t6", table_number: 6 },
-      { id: "t7", table_number: 7 },
-      { id: "t8", table_number: 8 },
-    ],
+    halls: previewHalls,
+    tables: previewTables.map((t) => ({
+      ...t,
+      hall_name: previewHalls.find((h) => h.id === t.hall_id)!.name,
+    })),
     options: DEFAULT_MENU_ITEMS.reduce<Record<string, DefaultOption[]>>(
       (acc, i) => {
         acc[i.id] = i.options.map((o, oi) => ({

@@ -31,8 +31,10 @@ import type {
   OrderCategory as Category,
   OrderMenuItem as MenuItem,
   OrderTableInfo as TableInfo,
+  OrderHallInfo as HallInfo,
   NewOrderLine as CartLine,
 } from "@/lib/order-create";
+import { MAIN_HALL_ID, MAIN_HALL_NAME } from "@/lib/halls";
 import { tx } from "@/lib/ops-tx";
 
 type Props = {
@@ -56,6 +58,8 @@ export function WaiterOrderComposer({
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [tables, setTables] = useState<TableInfo[]>([]);
+  const [halls, setHalls] = useState<HallInfo[]>([]);
+  const [hallId, setHallId] = useState("");
   const [optionsByItem, setOptionsByItem] = useState<
     Record<string, MenuOption[]>
   >({});
@@ -102,8 +106,11 @@ export function WaiterOrderComposer({
         [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
           id: `tbl-${n}`,
           table_number: n,
+          hall_id: null,
+          hall_name: MAIN_HALL_NAME,
         })),
       );
+      setHalls([{ id: MAIN_HALL_ID, name: MAIN_HALL_NAME, table_count: 8 }]);
       setLoading(false);
       return;
     }
@@ -115,6 +122,7 @@ export function WaiterOrderComposer({
           (res.items as MenuItem[]).filter((i) => i.is_available !== false),
         );
         setTables(res.tables as TableInfo[]);
+        setHalls((res.halls ?? []) as HallInfo[]);
         setOptionsByItem(res.optionsByItem as Record<string, MenuOption[]>);
       })
       .catch((e) =>
@@ -123,6 +131,17 @@ export function WaiterOrderComposer({
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPreview]);
+
+  // Default the hall to the one holding the most tables.
+  useEffect(() => {
+    if (!halls.length) return;
+    setHallId((cur) => {
+      if (cur && halls.some((h) => h.id === cur)) return cur;
+      return (
+        halls.slice().sort((a, b) => b.table_count - a.table_count)[0]?.id ?? ""
+      );
+    });
+  }, [halls]);
 
   const visibleItems = useMemo(() => {
     let list = items;
@@ -235,6 +254,8 @@ export function WaiterOrderComposer({
             token,
             order_type: orderType,
             table_number: orderType === "dine_in" ? Number(tableNo) : undefined,
+            // The same number can exist in several halls, so pin the hall.
+            hall_id: orderType === "dine_in" ? hallId : undefined,
             customer_name: orderType === "delivery" ? custName : undefined,
             customer_phone: orderType === "delivery" ? custPhone : undefined,
             customer_address: orderType === "delivery" ? custAddr : undefined,
@@ -282,22 +303,42 @@ export function WaiterOrderComposer({
           ))}
         </div>
         {orderType === "dine_in" && (
-          <div className="mt-2">
-            <Label className="text-xs">{tx("رقم الطاولة")}</Label>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {tables.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTableNo(String(t.table_number))}
-                  className={`w-9 h-9 rounded-lg text-sm font-bold border transition-colors ${
-                    tableNo === String(t.table_number)
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-card border-border hover:bg-muted"
-                  }`}
-                >
-                  {t.table_number}
-                </button>
-              ))}
+          <div className="mt-2 space-y-2">
+            {halls.length > 1 && (
+              <div>
+                <Label className="text-xs">{tx("القاعة")}</Label>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {halls.map((h) => (
+                    <button
+                      key={h.id}
+                      onClick={() => {
+                        setHallId(h.id);
+                        setTableNo("");
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                        hallId === h.id
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-card text-muted-foreground border-border hover:bg-muted"
+                      }`}
+                    >
+                      {h.name}
+                      <span className="opacity-60 text-[10px]">
+                        {" "}
+                        ({h.table_count})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs">{tx("رقم الطاولة")}</Label>
+              <HallTables
+                tables={tables}
+                hallId={hallId}
+                value={tableNo}
+                onChange={setTableNo}
+              />
             </div>
           </div>
         )}
@@ -603,6 +644,75 @@ export function WaiterOrderComposer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** Tables of the selected hall. Scrolls once the hall is large, and gets a
+ *  number filter so any table can be reached without hunting. */
+function HallTables({
+  tables,
+  hallId,
+  value,
+  onChange,
+}: {
+  tables: TableInfo[];
+  hallId: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const inHall = tables.filter(
+    (t) => (t.hall_id ?? MAIN_HALL_ID) === (hallId || MAIN_HALL_ID),
+  );
+  const pool = inHall.length ? inHall : tables;
+  const needle = q.trim();
+  const shown = needle
+    ? pool.filter((t) => String(t.table_number).includes(needle))
+    : pool;
+  const lots = pool.length > 24;
+
+  if (!pool.length) {
+    return (
+      <p className="text-[11px] text-muted-foreground mt-1">
+        لا توجد طاولات — أضفها من إعدادات القاعات والطاولات
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-1 space-y-1.5">
+      {lots && (
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={tx("رقم الطاولة…")}
+          inputMode="numeric"
+          className="h-7 w-24 text-xs"
+        />
+      )}
+      <div
+        className={
+          lots
+            ? "flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto pl-1"
+            : "flex flex-wrap gap-1.5"
+        }
+      >
+        {shown.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => onChange(String(t.table_number))}
+            className={
+              "w-9 h-9 rounded-lg text-sm font-bold border shrink-0 transition-colors " +
+              (value === String(t.table_number)
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-border hover:bg-muted")
+            }
+          >
+            {t.table_number}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

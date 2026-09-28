@@ -50,16 +50,25 @@ async function authRest(action: string, body: unknown): Promise<any> {
   return json;
 }
 
-/** Clears both emulators so every run starts deterministic (test-only endpoints). */
+/**
+ * Clears both emulators so every run starts deterministic (test-only endpoints).
+ *
+ * The wipe must target the same project id the emulator was started with
+ * (`npm run dev:emulators` uses `sahldz-demo`). Wiping a different id silently
+ * does nothing, which makes `accounts:signUp` fail with EMAIL_EXISTS on the
+ * second run. Both ids are cleared so the suite is deterministic either way.
+ */
 async function wipeEmulators(): Promise<void> {
-  await fetch(
-    "http://127.0.0.1:9099/emulator/v1/projects/test-project/accounts",
-    { method: "DELETE" },
-  );
-  await fetch(
-    "http://127.0.0.1:8081/emulator/v1/projects/test-project/databases/(default)/documents",
-    { method: "DELETE" },
-  );
+  for (const projectId of ["sahldz-demo", "test-project"]) {
+    await fetch(
+      `http://127.0.0.1:9099/emulator/v1/projects/${projectId}/accounts`,
+      { method: "DELETE" },
+    );
+    await fetch(
+      `http://127.0.0.1:8081/emulator/v1/projects/${projectId}/databases/(default)/documents`,
+      { method: "DELETE" },
+    );
+  }
 }
 
 let ownerUid = "";
@@ -134,7 +143,7 @@ describe("المجموعة أ — إضافة نادل ودخوله الحقيق�
     expect(res.waiterName).toBe("كريم");
     expect(res.waiterId).toBe(waiterId);
     expect(res.restaurant.id).toBe(rid);
-    expect(isStaffSessionExpired(res.token)).toBe(false);
+    expect(await isStaffSessionExpired(res.token)).toBe(false);
   });
 });
 
@@ -372,10 +381,11 @@ describe("المجموعة ز — حسابات المديرين", () => {
 
 // ─── Token helpers sanity ─────────────────────────────────────
 describe("توكن الجلسة", () => {
-  it("توكن منتهي يُعتبر منتهياً", () => {
+  it("توكن منتهي يُعتبر منتهياً", async () => {
+    // Both helpers are async: they sign/verify an HMAC.
     const expired = `stf.abc.${Date.now() - 1000}`;
-    expect(isStaffSessionExpired(expired)).toBe(true);
-    expect(isStaffSessionExpired(makeStaffSessionToken("abc"))).toBe(false);
-    expect(isStaffSessionExpired("garbage")).toBe(true);
+    expect(await isStaffSessionExpired(expired)).toBe(true);
+    expect(await isStaffSessionExpired(await makeStaffSessionToken("abc"))).toBe(false);
+    expect(await isStaffSessionExpired("garbage")).toBe(true);
   });
 });

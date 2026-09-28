@@ -24,8 +24,10 @@ export type {
   OrderMenuItem as CashierMenuItem,
   OrderCategory as CashierCategory,
   OrderTableInfo as CashierTableInfo,
+  OrderHallInfo as CashierHallInfo,
   NewOrderLine as CashierNewOrderLine,
 } from "@/lib/order-create";
+import { MAIN_HALL_ID } from "@/lib/halls";
 
 export type ReadyOrderLine = {
   name: string;
@@ -40,6 +42,8 @@ export type ReadyOrder = {
   total: number;
   created_at: string;
   table_number: number | null;
+  /** Name of the hall the table belongs to, for disambiguated display. */
+  hall_name?: string | null;
   daily_number: number | null;
   order_type?: string;
   status?: string;
@@ -114,7 +118,7 @@ async function enrichOrders(orderRows: any[]): Promise<ReadyOrder[]> {
     supabase.from("order_items").select("*").in("order_id", ids),
     supabase
       .from("tables")
-      .select("id,table_number")
+      .select("id,table_number,hall_id")
       .in("id", orderRows.map((o: any) => o.table_id).filter(Boolean)),
   ]);
 
@@ -129,8 +133,29 @@ async function enrichOrders(orderRows: any[]): Promise<ReadyOrder[]> {
   }
 
   const tableMap = new Map<string, number>();
-  for (const t of tablesRes.data ?? [])
+  const tableHall = new Map<string, string | null>();
+  for (const t of tablesRes.data ?? []) {
     tableMap.set((t as any).id, (t as any).table_number);
+    tableHall.set((t as any).id, (t as any).hall_id ?? null);
+  }
+
+  // Halls are optional metadata — resolve names only for the halls in play.
+  const hallIds = [
+    ...new Set([...tableHall.values()].filter(Boolean)),
+  ] as string[];
+  let hallName = new Map<string, string>();
+  if (hallIds.length) {
+    const { data: hallRows } = await supabase
+      .from("halls")
+      .select("id,name")
+      .in("id", hallIds);
+    hallName = new Map(
+      ((hallRows ?? []) as { id: string; name: string }[]).map((h) => [
+        h.id,
+        h.name,
+      ]),
+    );
+  }
 
   return orderRows.map((o: any) => {
     const items = (itemsByOrder.get(o.id) ?? []).map((it: any) => ({
@@ -145,6 +170,9 @@ async function enrichOrders(orderRows: any[]): Promise<ReadyOrder[]> {
       total: o.total as number,
       created_at: o.created_at as string,
       table_number: o.table_id ? (tableMap.get(o.table_id) ?? null) : null,
+      hall_name: o.table_id
+        ? (hallName.get(tableHall.get(o.table_id) ?? "") ?? null)
+        : null,
       daily_number: (o.daily_number as number) ?? null,
       status: (o.status as string) ?? "new",
       order_type: (o.order_type as string) ?? "dine_in",
@@ -259,26 +287,40 @@ export const cashierUpdateOrderStatus = createServerFn({ method: "POST" })
     return cashierUpdateOrderStatusCore(token, orderId, status);
   });
 
-/** DB logic: lookup orders for a specific table number. */
+/** DB logic: lookup orders for a specific table, optionally within a hall. */
 export async function cashierLookupTableCore(
   token: string,
   tableNumber: number,
+  hallId?: string | null,
 ) {
   const restaurantId = await resolveCashierRestaurantId(token);
 
-  const { data: table } = await supabase
+  // The same number may exist in several halls, so read the candidates and
+  // narrow in JS — the adapter cannot express "hall_id is null" as a filter.
+  const { data: rows } = await supabase
     .from("tables")
-    .select("id")
+    .select("id,hall_id")
     .eq("restaurant_id", restaurantId)
-    .eq("table_number", tableNumber)
-    .maybeSingle();
-  if (!table) return { orders: [] as ReadyOrder[] };
+    .eq("table_number", tableNumber);
+  const candidates = (rows ?? []) as { id: string; hall_id: string | null }[];
+  if (!candidates.length) return { orders: [] as ReadyOrder[] };
+
+  let match: { id: string; hall_id: string | null } | undefined;
+  if (hallId === undefined) {
+    match = candidates.length === 1 ? candidates[0] : undefined;
+  } else {
+    const wanted = hallId === MAIN_HALL_ID ? null : hallId;
+    match = candidates.find((t) => (t.hall_id ?? null) === wanted);
+  }
+  // Ambiguous and unfiltered: return the orders of every matching table.
+  const tableIds = match ? [match.id] : candidates.map((t) => t.id);
+  if (!tableIds.length) return { orders: [] as ReadyOrder[] };
 
   const { data: orderRows } = await supabase
     .from("orders")
     .select("*")
     .eq("restaurant_id", restaurantId)
-    .eq("table_id", (table as any).id)
+    .in("table_id", tableIds)
     .in("status", ["new", "preparing", "ready"])
     .order("created_at", { ascending: false });
 
@@ -286,13 +328,16 @@ export async function cashierLookupTableCore(
 }
 
 export const cashierLookupTable = createServerFn({ method: "GET" })
-  .validator((d: { token: string; tableNumber: number }) => d)
+  .validator(
+    (d: { token: string; tableNumber: number; hallId?: string | null }) => d,
+  )
   .handler(async ({ data }) => {
-    const { token, tableNumber } = data as {
+    const { token, tableNumber, hallId } = data as {
       token: string;
       tableNumber: number;
+      hallId?: string | null;
     };
-    return cashierLookupTableCore(token, tableNumber);
+    return cashierLookupTableCore(token, tableNumber, hallId);
   });
 
 export type CashierPaymentMode = "full" | "partial" | "debt" | "gift";

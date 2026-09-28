@@ -214,13 +214,25 @@ export function canWriteOpsArea(
 }
 
 /**
+ * The legacy `role` field is written from permission *labels* ("المطبخ") while
+ * the role constants are bare ("مطبخ"), and older rows carry either spelling.
+ * Comparing a normalized form keeps both resolving to the same role.
+ */
+export function normalizeRoleLabel(role: unknown): string {
+  if (typeof role !== "string") return "";
+  const s = role.trim();
+  return s.startsWith("ال") ? s.slice(2) : s;
+}
+
+/**
  * Legacy compatibility: derive permission list from the old single `role`
  * free-text field (كاشير / نادل / مطبخ).
  */
 export function derivePermissionsFromRole(role: unknown): string[] {
-  if (role === ROLE_KITCHEN) return ["kitchen"];
-  if (role === ROLE_WAITER) return ["waiter"];
-  if (role === ROLE_CASHIER) return ["cashier"];
+  const r = normalizeRoleLabel(role);
+  if (r === ROLE_KITCHEN) return ["kitchen"];
+  if (r === ROLE_WAITER) return ["waiter"];
+  if (r === ROLE_CASHIER) return ["cashier"];
   return [];
 }
 

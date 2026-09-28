@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getFirebaseDb } from "@/integrations/firebase/config";
 import { getMenuOptionsForItemsCore } from "@/lib/menu-options.functions";
 import type { MenuOption } from "@/lib/menu-options.functions";
+import { loadMenuRouting, resolveLineKitchen } from "@/lib/kitchens";
 
 export type PublicRestaurant = {
   id: string;
@@ -14,6 +15,8 @@ export type PublicCategory = {
   id: string;
   name: string;
   display_order: number;
+  /** Kitchen that prepares every item of this category. */
+  kitchen_id?: string | null;
 };
 
 export type PublicMenuItem = {
@@ -22,6 +25,8 @@ export type PublicMenuItem = {
   description: string | null;
   price: number;
   category_id: string | null;
+  /** Resolved kitchen for this item, used to split the order on write. */
+  kitchen_id?: string | null;
   image_url: string | null;
   is_available: boolean | null;
 };
@@ -93,23 +98,37 @@ async function fetchMenu(restaurantId: string) {
   const [catRes, itemRes] = await Promise.all([
     supabase
       .from("categories")
-      .select("id,name,display_order")
+      .select("id,name,display_order,kitchen_id")
       .eq("restaurant_id", restaurantId)
       .order("display_order", { ascending: true }),
     supabase
       .from("menu_items")
-      .select("id,name,description,price,category_id,image_url,is_available")
+      .select("id,name,description,price,category_id,kitchen_id,image_url,is_available")
       .eq("restaurant_id", restaurantId)
       .order("created_at", { ascending: true }),
   ]);
   if (catRes.error) throw new Error(catRes.error.message);
   if (itemRes.error) throw new Error(itemRes.error.message);
+  const categories = (catRes.data ?? []) as PublicCategory[];
+
+  // Resolve routing once so a public order is split per kitchen exactly like
+  // a cashier order is.
+  const catKitchen = new Map<string, string>();
+  for (const c of categories) {
+    if (c.kitchen_id) catKitchen.set(c.id, c.kitchen_id);
+  }
   const items = (itemRes.data ?? []) as PublicMenuItem[];
+  for (const i of items) {
+    i.kitchen_id = resolveLineKitchen({
+      item_kitchen_id: i.kitchen_id,
+      category_kitchen_id: catKitchen.get(i.category_id ?? ""),
+    });
+  }
   const { optionsByItem } = await getMenuOptionsForItemsCore(
     items.map((i) => i.id),
   );
   return {
-    categories: (catRes.data ?? []) as PublicCategory[],
+    categories,
     items,
     optionsByItem,
   };
@@ -192,6 +211,8 @@ export type PublicOrderLine = {
   price: number;
   note?: string | null;
   options?: PublicOrderOptionSelection[] | null;
+  /** Where the line was added from, so the order can be split per kitchen. */
+  category_id?: string | null;
 };
 
 type PlaceOrderContext = {
@@ -253,6 +274,12 @@ async function createPublicOrderCore(
   if (error) throw new Error(error.message);
   const orderId = (created as any).id;
 
+  // Same server-side routing snapshot as the cashier path: resolved from the
+  // live menu, never from the client, so historic tickets stay correct.
+  const { categoryToKitchen, itemToKitchen } = await loadMenuRouting(
+    ctx.restaurantId,
+  );
+
   const itemRows = lines.map((l) => ({
     order_id: orderId,
     menu_item_id: l.menu_item_id,
@@ -261,6 +288,12 @@ async function createPublicOrderCore(
     price_snapshot: l.price || 0,
     note: l.note || null,
     options_snapshot: l.options?.length ? JSON.stringify(l.options) : null,
+    category_id: l.category_id ?? null,
+    kitchen_id:
+      itemToKitchen.get(l.menu_item_id) ??
+      resolveLineKitchen({
+        category_kitchen_id: categoryToKitchen.get(l.category_id ?? ""),
+      }),
   }));
   const { error: itemsErr } = await supabase
     .from("order_items")

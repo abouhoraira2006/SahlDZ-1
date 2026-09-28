@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // External links
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
 
+  // Kitchen printing
+  getPrintCapabilities: () => ipcRenderer.invoke("print-capabilities"),
+  listPrinters: () => ipcRenderer.invoke("printers-list"),
+  printTicket: (opts) => ipcRenderer.invoke("print-ticket", opts),
+
   // Updates
   checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
   installUpdate: () => ipcRenderer.invoke("install-update"),

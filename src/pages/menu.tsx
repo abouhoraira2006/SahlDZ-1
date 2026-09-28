@@ -53,12 +53,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  defaultKitchen,
+  loadKitchensSnapshot,
+  type Kitchen,
+} from "@/lib/kitchens";
 
 type Category = {
   id: string;
   name: string;
   display_order: number;
   image_url: string | null;
+  /** Kitchen that prepares this category; null = default kitchen. */
+  kitchen_id?: string | null;
 };
 type MenuItem = {
   id: string;
@@ -106,6 +113,10 @@ export default function MenuPage() {
     }
   };
   const [categories, setCategories] = useState<Category[]>([]);
+  /** Kitchens used to route a category to a station (and its printer). */
+  const [kitchens, setKitchens] = useState<Kitchen[]>([]);
+  /** Empty = default kitchen. */
+  const [catKitchen, setCatKitchen] = useState<string>("");
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -142,7 +153,7 @@ export default function MenuPage() {
     const [catsRes, itsRes] = await Promise.all([
       supabase
         .from("categories")
-        .select("id, name, display_order, image_url")
+        .select("id, name, display_order, image_url, kitchen_id")
         .eq("restaurant_id", rid)
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: true }),
@@ -156,6 +167,11 @@ export default function MenuPage() {
     ]);
     if (catsRes.error) toast.error("تعذّر تحميل الفئات");
     if (itsRes.error) toast.error("تعذّر تحميل الأصناف");
+    // Kitchens are optional routing metadata: a restaurant with none still
+    // routes everything to the default kitchen, so a failure is not fatal.
+    loadKitchensSnapshot(rid)
+      .then((kk) => setKitchens(kk.kitchens))
+      .catch(() => setKitchens([defaultKitchen()]));
     if (catsRes.data) setCategories(catsRes.data as Category[]);
     if (itsRes.data) setItems(itsRes.data as MenuItem[]);
     setLoading(false);
@@ -190,6 +206,7 @@ export default function MenuPage() {
     setCatName("");
     setCatImage(null);
     setCatImagePreview(null);
+    setCatKitchen("");
     setCatOpen(true);
   };
   const openCatEdit = (c: Category) => {
@@ -197,6 +214,7 @@ export default function MenuPage() {
     setCatName(c.name);
     setCatImage(null);
     setCatImagePreview(c.image_url);
+    setCatKitchen(c.kitchen_id ?? "");
     setCatOpen(true);
   };
   const saveCat = async () => {
@@ -223,7 +241,7 @@ export default function MenuPage() {
       if (catEditing) {
         const { error } = await supabase
           .from("categories")
-          .update({ name, image_url: imageUrl })
+          .update({ name, image_url: imageUrl, kitchen_id: catKitchen })
           .eq("id", catEditing.id);
         if (error) throw error;
         toast.success("تم تعديل الفئة");
@@ -233,6 +251,7 @@ export default function MenuPage() {
           name,
           display_order: categories.length,
           image_url: imageUrl,
+          kitchen_id: catKitchen,
         });
         if (error) throw error;
         toast.success("تمت إضافة الفئة");
@@ -663,6 +682,24 @@ export default function MenuPage() {
               maxLength={60}
               placeholder="مثلاً: المقبلات"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>المطبخ المسؤول</Label>
+            <Select value={catKitchen || "default"} onValueChange={setCatKitchen}>
+              <SelectTrigger>
+                <SelectValue placeholder="المطبخ الرئيسي" />
+              </SelectTrigger>
+              <SelectContent>
+                {kitchens.map((k) => (
+                  <SelectItem key={k.id} value={k.id}>
+                    {k.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              كل أصناف هذه الفئة تذهب لهذا المطبخ وتُطبع على طابعته.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="cat-image">صورة الفئة (اختياري)</Label>

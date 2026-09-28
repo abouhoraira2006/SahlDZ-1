@@ -21,6 +21,7 @@ export {
   ROLE_WAITER,
   ROLE_KITCHEN,
   GLOBAL_ROLES,
+  normalizeRoleLabel,
 } from "@/lib/staff-permissions";
 // ─── HMAC signing for session tokens ───────────────────────────
 // In production, set STAFF_TOKEN_SECRET as an env variable.

@@ -7,6 +7,8 @@ import {
   ShoppingBag,
   Bike,
   ChevronLeft,
+  LayoutGrid,
+  ChefHat,
 } from "lucide-react";
 
 export function SettingsHubView({ basePath }: { basePath: string }) {
@@ -19,9 +21,24 @@ export function SettingsHubView({ basePath }: { basePath: string }) {
     },
     {
       title: "الموظفون",
-      description: "إضافة وحذف الموظفين وتعديل صلاحياتهم (كاشير، نادل، مطبخ...).",
+      description:
+        "إضافة وحذف الموظفين وتعديل صلاحياتهم (كاشير، نادل، مطبخ...).",
       icon: Users,
       to: `${basePath}/employees`,
+    },
+    {
+      title: "المطابخ والطباعة",
+      description:
+        "قسّم العمل بين المطابخ، واربط كل مطبخ بطابعته ليطبع أصنافه تلقائياً.",
+      icon: ChefHat,
+      to: `${basePath}/kitchens`,
+    },
+    {
+      title: "القاعات والطاولات",
+      description:
+        "أضف قاعاتك بعدد الطاولات الذي تريده، وولّد رمز QR لكل طاولة من زر واحد.",
+      icon: LayoutGrid,
+      to: `${basePath}/halls`,
     },
     {
       title: "صفحة الترحيب (Splash)",
@@ -37,13 +54,15 @@ export function SettingsHubView({ basePath }: { basePath: string }) {
     },
     {
       title: "نظام التوصيل (Delivery)",
-      description: "تفعيل وتخصيص رابط الطلب من المنزل ومشاركته عبر مواقع التواصل.",
+      description:
+        "تفعيل وتخصيص رابط الطلب من المنزل ومشاركته عبر مواقع التواصل.",
       icon: Bike,
       to: `${basePath}/delivery`,
     },
     {
       title: "الطلب السريع (Takeaway)",
-      description: "إنشاء وطباعة رمز QR للطلب السريع من الطاولة أو واجهة المحل.",
+      description:
+        "إنشاء وطباعة رمز QR للطلب السريع من الطاولة أو واجهة المحل.",
       icon: ShoppingBag,
       to: `${basePath}/takeaway`,
     },

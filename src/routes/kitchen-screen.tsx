@@ -22,6 +22,7 @@ import {
   Filter,
   History,
   Eye,
+  Printer,
   EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +36,15 @@ import {
   individualChefLogout,
   getPublicChefList,
 } from "@/lib/individual-chef.functions";
+import {
+  loadKitchensSnapshot,
+  resolveKitchenId,
+  type Kitchen,
+} from "@/lib/kitchens";
+import {
+  buildKitchenTicket,
+  printKitchenTicket as printKitchenTicketSilent,
+} from "@/lib/kitchen-print";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +78,7 @@ type Order = {
   customer_phone: string | null;
   customer_address: string | null;
   daily_number: number | null;
+  total?: number;
   chef_id?: string | null;
   chef_name?: string | null;
   started_at?: string | null;
@@ -144,127 +155,54 @@ function getElapsedMinutes(iso: string) {
   );
 }
 
-function printKitchenTicket(order: Order, restaurantName: string) {
-  const date = new Date(order.created_at);
-  const dateStr = date.toLocaleString("ar", {
-    dateStyle: "short",
-    timeStyle: "short",
+/**
+ * Prints one order's slice for this kitchen.
+ *
+ * The order already arrives filtered to this terminal's kitchen, so the ticket
+ * carries only the dishes this station cooks. On the desktop the print is
+ * silent and targets the kitchen's own printer; in a browser it falls back to
+ * the print dialog.
+ */
+async function printKitchenTicket(
+  order: Order,
+  restaurantName: string,
+  station: Kitchen,
+) {
+  const html = buildKitchenTicket({
+    kitchenName: station.name || restaurantName || "المطبخ",
+    kitchenCode: station.code,
+    orderNo: order.daily_number ?? order.id,
+    orderType: order.order_type,
+    tableNumber: order.table_number,
+    customerName: order.customer_name,
+    customerPhone: order.customer_phone,
+    customerAddress: order.customer_address,
+    orderNotes: order.notes,
+    createdAt: order.created_at,
+    lines: (order.items ?? []).map((it) => ({
+      name: it.name,
+      qty: it.qty,
+      note: it.note,
+      options: it.options,
+    })),
   });
-  const orderNo = String(order.daily_number ?? 0).padStart(3, "0");
-  const itemsHtml = order.items
-    .map(
-      (it) => `
-        <tr>
-          <td style="padding:4px 0;">
-            <div style="font-weight:700; font-size:14px;">${escapeHtml(it.name)} ×${it.qty}</div>
-            ${
-              (it.options ?? []).length
-                ? `<div style="font-size:11px;color:#555;">${(it.options ?? [])
-                    .map(
-                      (o) =>
-                        `<div>— ${escapeHtml(o.label)}: ${escapeHtml(o.choice)}</div>`,
-                    )
-                    .join("")}</div>`
-                : ""
-            }
-            ${it.note ? `<div style="font-size:11px;color:#c0392b;">◈ ${escapeHtml(it.note)}</div>` : ""}
-          </td>
-        </tr>`,
-    )
-    .join("");
-  const deliveryHtml =
-    order.order_type === "delivery"
-      ? `
-  <div class="muted">
-    ${
-      order.customer_name
-        ? `<div>العميل: <b>${escapeHtml(order.customer_name)}</b></div>`
-        : ""
-    }
-    ${
-      order.customer_phone
-        ? `<div>الهاتف: <b>${escapeHtml(order.customer_phone)}</b></div>`
-        : ""
-    }
-    ${
-      order.customer_address
-        ? `<div>العنوان: <b>${escapeHtml(order.customer_address)}</b></div>`
-        : ""
-    }
-  </div>`
-      : "";
-  const html = `<!doctype html>
-<html dir="rtl" lang="ar">
-<head>
-<meta charset="utf-8" />
-<title>طلبية مطبخ - ${orderNo}</title>
-<style>
-  @page { size: 80mm auto; margin: 4mm; }
-  body { font-family: 'Cairo', system-ui, sans-serif; width: 72mm; margin: 0 auto; color: #000; }
-  .center { text-align: center; }
-  .name { font-size: 18px; font-weight: 800; }
-  .muted { color: #555; font-size: 12px; }
-  hr { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .thanks { margin-top: 10px; font-size: 12px; }
-</style>
-</head>
-<body>
-  <div class="center">
-    <div class="name">${escapeHtml(restaurantName)}</div>
-    <div class="muted">قسيمة الطلبية — المطبخ</div>
-  </div>
-  <hr />
-  <div class="muted">
-    <div style="font-size:16px; font-weight:800; color:#000;">طلبية <b>${orderNo}</b></div>
-    ${
-      order.table_number != null
-        ? `<div>طاولة <b>${order.table_number}</b></div>`
-        : "<div>طلبية توصيل 🛵</div>"
-    }
-    <div>التاريخ: ${dateStr}</div>
-  </div>
-  ${order.order_type === "delivery" ? `<hr />${deliveryHtml}` : ""}
-  <hr />
-  <table>
-    <tbody>${itemsHtml}</tbody>
-  </table>
-  ${order.notes ? `<div style="border:1px dashed #000; padding:6px; font-size:12px; margin:6px 0;">ملاحظات: ${escapeHtml(order.notes)}</div>` : ""}
-  <hr />
-  <div class="center thanks">استعمل دلائل الطاولة/التوصيل أعلاه</div>
-  <script>
-    window.onload = function() {
-      window.focus();
-      window.print();
-      setTimeout(function(){ window.close(); }, 300);
-    };
-  </script>
-</body>
-</html>`;
-  printHtml(html);
-}
 
-function printHtml(html: string) {
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "none";
-  iframe.style.opacity = "0";
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument;
-  if (!doc) {
-    document.body.removeChild(iframe);
-    return;
+  const res = await printKitchenTicketSilent({
+    html,
+    printerName: station.printer_name,
+    copies: station.copies || 1,
+    jobName: `k${station.code || "MAIN"}-${order.daily_number ?? order.id}`,
+  });
+
+  if (res.via === "dialog" && res.reason === "sumatra-missing") {
+    toast.warning("SumatraPDF غير موجود — فُتحت نافذة الطباعة");
+  } else if (res.via === "silent") {
+    toast.success("تم إرسال التذكرة للطابعة");
+  } else if (res.via === "dialog") {
+    toast.success("تم فتح نافذة الطباعة");
+  } else {
+    toast.error("تعذّر طباعة التذكرة");
   }
-  doc.open();
-  doc.write(html);
-  doc.close();
-  iframe.contentWindow?.focus();
-  iframe.contentWindow?.print();
-  setTimeout(() => document.body.removeChild(iframe), 500);
 }
 
 function escapeHtml(s: string): string {
@@ -327,6 +265,11 @@ function Page() {
 
   const [token, setToken] = useState<string | null>(null);
   const [chefName, setChefName] = useState<string | null>(null);
+  /** Which station this terminal serves — its label and its ticket slice. */
+  const [kitchenId, setKitchenId] = useState<string>("default");
+  const [kitchenName, setKitchenName] = useState<string | null>(null);
+  /** Printer + behaviour of the station this terminal is bound to. */
+  const [station, setStation] = useState<Kitchen | null>(null);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -371,12 +314,31 @@ function Page() {
     if (isPreviewToken(it)) {
       setRestaurant(PREVIEW_RESTAURANT);
       setChefName(localStorage.getItem("individual_chef_name"));
+      setKitchenId(
+        resolveKitchenId(localStorage.getItem("individual_chef_kitchen")),
+      );
       return;
     }
     iCtxFn({ data: { token: it } })
-      .then((res) => {
+      .then(async (res) => {
         setRestaurant(res.restaurant);
         setChefName(res.chefName);
+        setKitchenId(res.kitchenId);
+        localStorage.setItem("individual_chef_kitchen", res.kitchenId);
+        // Label the terminal with the station it serves, so the chef can see
+        // at a glance whether the right screen is open on this machine.
+        try {
+          const kk = await loadKitchensSnapshot(res.restaurant?.id);
+          const mine = kk.kitchens.find(
+            (k) => resolveKitchenId(k.id) === resolveKitchenId(res.kitchenId),
+          );
+          if (mine) {
+            setStation(mine);
+            setKitchenName(mine.name);
+          }
+        } catch {
+          /* label is cosmetic; ignore */
+        }
       })
       .catch(goLogin);
   }, [iCtxFn, navigate]);
@@ -558,13 +520,15 @@ function Page() {
     ),
   );
   useEffect(() => {
-    if (!restaurant) return;
+    if (!restaurant || !station) return;
+    // A kitchen that turned auto-print off waits for the chef to print by hand.
+    if (!station.auto_print) return;
     let changed = false;
     for (const o of orders) {
       if (o.status === "new" && !printedOrderIds.current.has(o.id)) {
         printedOrderIds.current.add(o.id);
         changed = true;
-        printKitchenTicket(o, restaurant.name);
+        void printKitchenTicket(o, restaurant.name, station);
       }
     }
     if (changed) {
@@ -573,7 +537,7 @@ function Page() {
         JSON.stringify([...printedOrderIds.current]),
       );
     }
-  }, [orders, restaurant]);
+  }, [orders, restaurant, station]);
 
   async function onReady(o: Order) {
     if (!token) return;
@@ -586,7 +550,7 @@ function Page() {
           data: {
             restaurantId: restaurant.id,
             orderId: o.id,
-            total: 0,
+            total: Number(o.total ?? 0),
             customerName: o.customer_name,
             customerPhone: o.customer_phone,
             customerAddress: o.customer_address,
@@ -679,6 +643,11 @@ function Page() {
               <ChefHat className="w-4 h-4 text-[var(--primary)]" />
               {restaurant.name}
             </div>
+            {kitchenName && (
+              <div className="text-[11px] font-semibold text-[var(--primary)] truncate">
+                {kitchenName}
+              </div>
+            )}
             {chefName && (
               <div className="text-[11px] text-[var(--muted-foreground)] truncate">
                 {chefName}
@@ -688,6 +657,24 @@ function Page() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Reprint a single ticket without waiting for auto-print. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            disabled={!station || busy !== null}
+            onClick={() => {
+              const target = selectedOrder ?? prepOrders[0] ?? newOrders[0];
+              if (!target || !restaurant || !station)
+                return toast.error("ما كاين حتى طلب للطباعة");
+              void printKitchenTicket(target, restaurant.name, station);
+            }}
+            title="إعادة طباعة تذكرة"
+          >
+            <Printer className="w-4 h-4" />
+            طباعة
+          </Button>
+
           {/* Filter buttons */}
           <div className="hidden md:flex items-center gap-1 bg-[var(--muted)] rounded-lg p-1">
             {(

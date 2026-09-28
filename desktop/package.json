@@ -1,6 +1,6 @@
 {
     "name": "sahldz-desktop",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "SahlDZ - نظام إدارة المطعم",
     "main": "main.js",
     "author": "SahlDZ Team",
@@ -9,13 +9,15 @@
         "start": "electron .",
         "dev": "set VITE_DEV_SERVER_URL=http://localhost:8080 && electron .",
         "build": "electron-builder",
-        "build:win": "electron-builder --win"
+        "build:win": "electron-builder --win",
+        "fetch:sumatra": "node scripts/fetch-sumatra.cjs",
+        "prebuild": "node scripts/fetch-sumatra.cjs"
     },
     "dependencies": {
         "electron-updater": "^6.1.0"
     },
     "devDependencies": {
-        "electron": "22.3.6",
+        "electron": "22.3.27",
         "electron-builder": "^24.0.0"
     },
     "build": {
@@ -28,6 +30,24 @@
             "main.js",
             "preload.js",
             "src/**/*"
+        ],
+        "extraResources": [
+            {
+                "from": "resources/sumatra",
+                "to": "sumatra",
+                "filter": [
+                    "**/*"
+                ]
+            }
+        ],
+        "extraResources": [
+            {
+                "from": "resources/sumatra",
+                "to": "sumatra",
+                "filter": [
+                    "**/*"
+                ]
+            }
         ],
         "win": {
             "target": [

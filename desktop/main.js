@@ -1,8 +1,10 @@
 const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const http = require("http");
 const https = require("https");
+const { spawn } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 
 // ─── Configuration ────────────────────────────────────────────
@@ -182,12 +184,165 @@ ipcMain.handle("get-platform", () => process.platform);
 ipcMain.handle("open-external", (_, url) => shell.openExternal(url));
 ipcMain.handle("get-app-url", () => APP_URL);
 ipcMain.handle("logout", () => { clearConfig(); navigateToApp(); });
-ipcMain.handle("check-for-updates", () => autoUpdater.checkForUpdates().catch(() => null));
-ipcMain.handle("install-update", () => autoUpdater.quitAndInstall());
 
+// ─── Kitchen printing (silent, per-station) ────────────────────
+// A kitchen ticket is produced by Electron itself so Arabic + RTL stay intact,
+// then handed to SumatraPDF, which prints it to the exact printer chosen in
+// the kitchen settings without ever showing a print dialog on the terminal.
+// Windows-only: on any other platform the renderer falls back to window.print().
+
+const PRINT_JOBS_DIR = path.join(app.getPath("temp"), "sahldz-print");
+const SUMATRA_NAMES = ["SumatraPDF.exe", "SumatraPDF-3.6.1-32.exe", "SumatraPDF-3.5.2-32.exe"];
+
+function sumatraPath() {
+  const packaged = path.join(process.resourcesPath || "", "sumatra");
+  const dev = path.join(__dirname, "resources", "sumatra");
+  for (const dir of [packaged, dev]) {
+    for (const name of SUMATRA_NAMES) {
+      const p = path.join(dir, name);
+      try {
+        if (fs.existsSync(p)) return p;
+      } catch { /* not packaged */ }
+    }
+  }
+  return null;
+}
+
+function ensureJobsDir() {
+  if (!fs.existsSync(PRINT_JOBS_DIR)) fs.mkdirSync(PRINT_JOBS_DIR, { recursive: true });
+  return PRINT_JOBS_DIR;
+}
+
+/** IPC: every printer Windows knows about, so the settings page can list them. */
+ipcMain.handle("printers-list", async () => {
+  if (process.platform !== "win32") return [];
+  try {
+    const printers = await mainWindow.webContents.getPrinters();
+    return printers.map((p) => ({ name: p.name, isDefault: p.isDefault }));
+  } catch (err) {
+    console.warn("[PRINT] getPrinters failed:", err && err.message);
+    return [];
+  }
+});
+
+/**
+ * IPC: render `html` to a PDF, then silently print it.
+ *
+ * A hidden BrowserWindow does the rendering so the ticket inherits the app's
+ * fonts and RTL rules, and printToPDF avoids depending on a printer driver
+ * during generation. `printerName` of null/empty prints to the system default.
+ */
+ipcMain.handle("print-ticket", async (event, opts) => {
+  const { html, printerName, copies, jobName } = opts || {};
+  if (typeof html !== "string" || !html.trim())
+    throw new Error("محتوى التذكرة فارغ");
+  if (process.platform !== "win32")
+    return { ok: false, reason: "unsupported-platform" };
+
+  const exe = sumatraPath();
+  if (!exe) return { ok: false, reason: "sumatra-missing" };
+
+  const dir = ensureJobsDir();
+  // Sequence + pid keeps concurrent stations from clobbering each other's file.
+  const safe = String(jobName || "ticket")
+    .replace(/[^A-Za-z0-9-_]/g, "")
+    .slice(0, 24) || "ticket";
+  const pdfPath = path.join(dir, `${safe}-${Date.now()}-${process.pid}.pdf`);
+  const htmlPath = path.join(dir, `${safe}-${Date.now()}-${process.pid}.html`);
+
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: { offscreen: true, javascript: false, sandbox: true },
+  });
+  try {
+    fs.writeFileSync(htmlPath, html, "utf8");
+    await win.loadFile(htmlPath);
+    const pdf = await win.webContents.printToPDF({
+      printBackground: true,
+      pageSize: "A4",
+      margins: { marginType: "custom", top: 0.2, bottom: 0.2, left: 0.2, right: 0.2 },
+    });
+    fs.writeFileSync(pdfPath, pdf);
+
+    const n = Math.min(Math.max(Number(copies) || 1, 1), 9);
+    // -silent is what keeps the print dialog from ever appearing on the
+    // terminal. An empty -print-to value targets the system default printer.
+    const args = ["-silent", "-nologo"];
+    if (printerName) args.push("-print-to", String(printerName));
+    for (let i = 0; i < n; i += 1) args.push(pdfPath);
+
+    // SUMATRA keeps running as a GUI process; we only need it to have handed
+    // the job to the spooler, so detach and clean up on our side.
+    const child = spawn(exe, args, { detached: true, stdio: "ignore" });
+    child.unref();
+
+    // The PDF is already in the spooler; the scratch files are ours to remove.
+    setTimeout(() => {
+      for (const p of [pdfPath, htmlPath]) {
+        try { fs.unlinkSync(p); } catch { /* already gone */ }
+      }
+    }, 30000);
+
+    return { ok: true, printer: printerName || null, copies: n };
+  } catch (err) {
+    for (const p of [pdfPath, htmlPath]) {
+      try { fs.unlinkSync(p); } catch { /* already gone */ }
+    }
+    throw new Error("فشل توليد التذكرة: " + (err && err.message));
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
+  }
+});
+
+/** IPC: probe for Sumatra so the UI can warn before a ticket is lost. */
+ipcMain.handle("print-capabilities", async () => {
+  if (process.platform !== "win32")
+    return { supported: false, sumatra: false, reason: "unsupported-platform" };
+  const exe = sumatraPath();
+  return { supported: true, sumatra: !!exe, tempDir: os.tmpdir() };
+});
 // ─── Auto Update ──────────────────────────────────────────────
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+// Windows 7 SP1 is still a target for the cashier/kitchen terminals, and those
+// machines sit behind flaky links.  Only phones home when the OS is new
+// enough to be worth it, and never let a missing/failing feed break the app.
+const osRelease = () => {
+  try {
+    const r = process.getSystemVersion(); // "6.1" on Win7, "10.0" on Win10+
+    const [major, minor] = String(r).split(".").map(Number);
+    return { major: major || 0, minor: minor || 0, text: String(r) };
+  } catch {
+    return { major: 0, minor: 0, text: "unknown" };
+  }
+};
+
+// 6.1 = Windows 7, 6.2 = Windows 8, 6.3 = Windows 8.1, 10.0 = Windows 10+
+const isLegacyWindows = () => {
+  const { major } = osRelease();
+  return major < 10;
+};
+
+const UPDATES_ENABLED = !isLegacyWindows();
+
+const checkForUpdates = () => {
+  if (!UPDATES_ENABLED) return Promise.resolve(null);
+  return autoUpdater
+    .checkForUpdates()
+    .catch((err) => {
+      // A 404/missing feed is expected on some deployments - stay silent.
+      console.warn("[UPDATE] check skipped:", err && err.message);
+      return null;
+    });
+};
+
+ipcMain.handle("check-for-updates", () => checkForUpdates());
+ipcMain.handle("install-update", () => {
+  if (!UPDATES_ENABLED) return false;
+  autoUpdater.quitAndInstall();
+  return true;
+});
+
+autoUpdater.autoDownload = UPDATES_ENABLED;
+autoUpdater.autoInstallOnAppQuit = UPDATES_ENABLED;
 autoUpdater.logger = {
   info: (m) => console.log("[UPDATE]", m),
   warn: (m) => console.warn("[UPDATE]", m),
@@ -211,7 +366,7 @@ autoUpdater.on("update-downloaded", (info) => {
     }).then(({ response }) => { if (response === 0) autoUpdater.quitAndInstall(); });
   }
 });
-autoUpdater.on("error", (err) => console.error("[UPDATE]", err.message));
+autoUpdater.on("error", (err) => console.warn("[UPDATE]", err.message));
 
 // ─── Lifecycle ────────────────────────────────────────────────
 let gotTheLock = true;
@@ -222,10 +377,10 @@ if (!gotTheLock) {
 } else {
   app.whenReady().then(() => {
     createMainWindow();
-    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10000);
+    if (UPDATES_ENABLED) setTimeout(() => checkForUpdates(), 10000);
     app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) createMainWindow(); });
   });
 }
 
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
-app.on("before-quit", () => autoUpdater.removeAllListeners());
+app.on("before-quit", () => { if (UPDATES_ENABLED) autoUpdater.removeAllListeners(); });

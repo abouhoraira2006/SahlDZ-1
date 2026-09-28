@@ -88,7 +88,7 @@ function OpsWaste() {
       if (cancel) return;
 
       const ingIds = [...new Set((logs ?? []).map((l: any) => l.ingredient_id).filter(Boolean))];
-      let ingMap = new Map<string, { name: string; unit: string }>();
+      const ingMap = new Map<string, { name: string; unit: string }>();
       if (ingIds.length) {
         const { data: ings } = await supabase.from("ingredients").select("id,name,unit").in("id", ingIds);
         for (const i of ings ?? []) ingMap.set((i as any).id, { name: (i as any).name, unit: (i as any).unit });

@@ -20,6 +20,7 @@ import {
   Timer,
   LayoutGrid,
   ChevronLeft,
+  Bike,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -41,12 +42,14 @@ import {
   type CashierMenuItem,
   type CashierCategory,
   type CashierTableInfo,
+  type CashierHallInfo,
   type CashierNewOrderLine,
   type ReadyOrder,
   type CashierPaymentOutcome,
 } from "@/lib/cashier.functions";
 import { type MenuOption } from "@/lib/menu-options.functions";
 import { buildDefaultCashierMenu } from "@/lib/default-menu";
+import { MAIN_HALL_ID, MAIN_HALL_NAME } from "@/lib/halls";
 import { formatDZD } from "@/lib/restaurant";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
 import { tx } from "@/lib/ops-tx";
@@ -195,15 +198,23 @@ function Page() {
   const [zReport, setZReport] = useState<ZReport | null>(null);
   const [zLoading, setZLoading] = useState(false);
   const [showReady, setShowReady] = useState(false);
-  const [selectedPayTable, setSelectedPayTable] = useState<number | null>(null);
+  // "all" | "delivery" | `table:<table_number>` — delivery orders have no table.
+  const [payScope, setPayScope] = useState<string>("all");
 
   const readyTableNumbers = [
     ...new Set(readyOrders.map((o) => o.table_number).filter(Boolean)),
   ] as number[];
+  const readyDeliveryCount = readyOrders.filter(
+    (o) => o.order_type === "delivery",
+  ).length;
   const filteredPayOrders =
-    selectedPayTable !== null
-      ? readyOrders.filter((o) => o.table_number === selectedPayTable)
-      : readyOrders;
+    payScope === "all"
+      ? readyOrders
+      : payScope === "delivery"
+        ? readyOrders.filter((o) => o.order_type === "delivery")
+        : readyOrders.filter(
+            (o) => o.table_number === Number(payScope.replace("table:", "")),
+          );
 
   const prevReadyCount = useRef(readyOrders.length);
   const skipRefreshUntil = useRef(0);
@@ -215,7 +226,11 @@ function Page() {
       );
       newOrders.forEach((o) => {
         toast.success(
-          `طاولة ${o.table_number ?? "—"} — الطلب ${fmtOrderNo(o.daily_number)} جاهز للتسليم!`,
+          `${o.order_type === "delivery" ? tx("توصيل") : tx("طاولة")} ${
+            o.order_type === "delivery"
+              ? o.customer_name || tx("عميل توصيل")
+              : `${o.hall_name ? o.hall_name + " / " : ""}${o.table_number ?? "—"}`
+          } — ${tx("الطلب")} ${fmtOrderNo(o.daily_number)} ${tx("جاهز للتسليم!")}`,
           { duration: 6000 },
         );
       });
@@ -719,18 +734,41 @@ function Page() {
                 </p>
               ) : (
                 <>
-                  {/* Table Chips */}
+                  {/* Table + delivery chips */}
                   <div className="flex gap-2 flex-wrap mb-4">
                     <button
-                      onClick={() => setSelectedPayTable(null)}
+                      onClick={() => setPayScope("all")}
                       className={`px-3 py-2 rounded-xl text-sm font-bold border transition-colors ${
-                        selectedPayTable === null
+                        payScope === "all"
                           ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]"
                           : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--primary)]/60"
                       }`}
                     >
                       الكل ({readyOrders.length})
                     </button>
+                    {readyDeliveryCount > 0 && (
+                      <button
+                        onClick={() => setPayScope("delivery")}
+                        className={`px-3 py-2 rounded-xl text-sm font-bold border transition-colors flex items-center gap-2 ${
+                          payScope === "delivery"
+                            ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]"
+                            : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--primary)]/60"
+                        }`}
+                      >
+                        <Bike className="w-4 h-4" />
+                        <span>{tx("cashierScreen.delivery")}</span>
+                        <span className="text-[10px] opacity-80">
+                          {readyDeliveryCount}
+                        </span>
+                        <span className="text-[10px] opacity-70 tabular-nums">
+                          {formatDZD(
+                            readyOrders
+                              .filter((o) => o.order_type === "delivery")
+                              .reduce((s, o) => s + o.total, 0),
+                          )}
+                        </span>
+                      </button>
+                    )}
                     {readyTableNumbers.map((tn) => {
                       const count = readyOrders.filter(
                         (o) => o.table_number === tn,
@@ -738,17 +776,23 @@ function Page() {
                       const tableTotal = readyOrders
                         .filter((o) => o.table_number === tn)
                         .reduce((s, o) => s + o.total, 0);
+                      const hall = readyOrders.find(
+                        (o) => o.table_number === tn,
+                      )?.hall_name;
                       return (
                         <button
                           key={tn}
-                          onClick={() => setSelectedPayTable(tn)}
+                          onClick={() => setPayScope(`table:${tn}`)}
                           className={`px-3 py-2 rounded-xl text-sm font-bold border transition-colors flex items-center gap-2 ${
-                            selectedPayTable === tn
+                            payScope === `table:${tn}`
                               ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]"
                               : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--primary)]/60"
                           }`}
                         >
-                          <span>طاولة {tn}</span>
+                          <span>
+                            {hall ? `${hall} · ` : ""}
+                            {tx("cashierScreen.tableLabel")} {tn}
+                          </span>
                           <span className="text-[10px] opacity-80">
                             {count} {count === 1 ? "طلب" : "طلبات"}
                           </span>
@@ -769,12 +813,25 @@ function Page() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-primary">
-                              #{o.table_number ?? "—"}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {tx("cashierScreen.tableLabel")}
-                            </span>
+                            {o.order_type === "delivery" ? (
+                              <>
+                                <Bike className="w-4 h-4 text-primary" />
+                                <span className="text-sm font-bold text-primary">
+                                  {tx("cashierScreen.delivery")}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-lg font-bold text-primary">
+                                  #{o.table_number ?? "—"}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {o.hall_name
+                                    ? `${o.hall_name} · ${tx("cashierScreen.tableLabel")}`
+                                    : tx("cashierScreen.tableLabel")}
+                                </span>
+                              </>
+                            )}
                           </div>
                           <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full flex items-center gap-1">
                             {fmtOrderNo(o.daily_number)}
@@ -785,6 +842,38 @@ function Page() {
                             )}
                           </span>
                         </div>
+
+                        {/* Delivery customer details — the driver settles with the cashier */}
+                        {o.order_type === "delivery" && (
+                          <div className="text-[11px] bg-muted/40 rounded-lg p-2 space-y-0.5">
+                            <div className="font-bold text-foreground">
+                              {o.customer_name ||
+                                tx("cashierScreen.noCustomer")}
+                            </div>
+                            {o.customer_phone && (
+                              <div
+                                dir="ltr"
+                                className="text-right tabular-nums"
+                              >
+                                {o.customer_phone}
+                              </div>
+                            )}
+                            {o.customer_address && (
+                              <div className="text-muted-foreground">
+                                {o.customer_address}
+                              </div>
+                            )}
+                            {o.notes && (
+                              <div className="text-muted-foreground italic">
+                                {o.notes}
+                              </div>
+                            )}
+                            <div className="pt-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                              {tx("cashierScreen.unpaidPending")}
+                            </div>
+                          </div>
+                        )}
+
                         <ul className="space-y-0.5 text-xs">
                           {o.items.map((it, idx) => (
                             <li key={idx} className="flex justify-between">
@@ -817,7 +906,9 @@ function Page() {
                               className="h-8 text-xs gap-1"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              تم الدفع
+                              {o.order_type === "delivery"
+                                ? "تحديد الدفع"
+                                : tx("cashierScreen.markPaid")}
                             </Button>
                           </div>
                         </div>
@@ -1264,7 +1355,136 @@ function printOrderTicket(
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   POS NEW ORDER VIEW — professional layout
+   HALL + TABLE PICKER — unlimited tables, grouped by hall
+   ═══════════════════════════════════════════════════════════════ */
+function HallTablePicker({
+  halls,
+  tables,
+  hallId,
+  onHallChange,
+  value,
+  onChange,
+  tx,
+}: {
+  halls: CashierHallInfo[];
+  tables: CashierTableInfo[];
+  hallId: string;
+  onHallChange: (id: string) => void;
+  value: string;
+  onChange: (v: string) => void;
+  tx: (k: string) => string;
+}) {
+  const [query, setQuery] = useState("");
+
+  // No halls configured (older data): fall back to one implicit group.
+  const groups: CashierHallInfo[] = halls.length
+    ? halls
+    : [{ id: MAIN_HALL_ID, name: MAIN_HALL_NAME, table_count: tables.length }];
+
+  const activeHall = groups.find((h) => h.id === hallId) ?? groups[0];
+  const hallTables = tables.filter(
+    (t) => (t.hall_id ?? MAIN_HALL_ID) === activeHall.id,
+  );
+  // A hall can be configured but empty; only then fall back to every table.
+  const pool = hallTables.length
+    ? hallTables
+    : activeHall.table_count
+      ? hallTables
+      : tables;
+  const q = query.trim();
+  const shown = q
+    ? pool.filter((t) => String(t.table_number).includes(q))
+    : pool;
+  const lots = pool.length > 24;
+
+  return (
+    <div className="flex items-start gap-2 flex-1 min-w-0">
+      {/* Hall switcher — only shown when the restaurant has real halls */}
+      {groups.length > 1 && (
+        <div className="flex flex-col gap-1 shrink-0">
+          <span className="text-[10px] text-muted-foreground font-bold">
+            القاعة
+          </span>
+          <div className="flex flex-wrap gap-1 max-w-[150px]">
+            {groups.map((h) => (
+              <button
+                key={h.id}
+                onClick={() => onHallChange(h.id)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                  activeHall.id === h.id
+                    ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]"
+                    : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--primary)]/50"
+                }`}
+              >
+                {h.name}
+                <span className="opacity-60 text-[10px]">
+                  {" "}
+                  ({h.table_count})
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tables of the active hall */}
+      <div className="flex flex-col gap-1 flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground font-bold">
+            الطاولة
+          </span>
+          {lots && (
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="رقم…"
+              inputMode="numeric"
+              className="h-7 w-16 rounded-md border border-[var(--border)] bg-[var(--card)] px-2 text-xs text-[var(--foreground)]"
+            />
+          )}
+          {value && (
+            <button
+              onClick={() => onChange("")}
+              className="text-[10px] text-[var(--primary)] hover:underline"
+            >
+              {tx("cashierScreen.newOrderChangeTable")}
+            </button>
+          )}
+        </div>
+
+        {shown.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground py-1">
+            {tables.length === 0
+              ? "لا توجد طاولات — أضفها من إعدادات القاعات والطاولات"
+              : q
+                ? "لا يوجد رقم بهذا"
+                : "لا توجد طاولات في هذه القاعة"}
+          </p>
+        ) : (
+          <div
+            className={`flex gap-1.5 ${lots ? "flex-wrap max-h-[104px] overflow-y-auto pr-1" : "flex-wrap"}`}
+          >
+            {shown.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => onChange(String(t.table_number))}
+                className={`w-9 h-9 rounded-xl text-sm font-bold border transition-all shrink-0 ${
+                  value === String(t.table_number)
+                    ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)] shadow-md"
+                    : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--primary)]/60 hover:text-[var(--foreground)]"
+                }`}
+              >
+                {t.table_number}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════   POS NEW ORDER VIEW — professional layout
    Left: categories + items grid | Right: cart + controls
    ═══════════════════════════════════════════════════════════════ */
 function NewOrderView({
@@ -1282,6 +1502,8 @@ function NewOrderView({
   const [categories, setCategories] = useState<CashierCategory[]>([]);
   const [items, setItems] = useState<CashierMenuItem[]>([]);
   const [tables, setTables] = useState<CashierTableInfo[]>([]);
+  const [halls, setHalls] = useState<CashierHallInfo[]>([]);
+  const [hallId, setHallId] = useState<string>("");
   const [optionsByItem, setOptionsByItem] = useState<
     Record<string, MenuOption[]>
   >({});
@@ -1311,6 +1533,7 @@ function NewOrderView({
       setCategories(d.categories);
       setItems(d.items);
       setTables(d.tables);
+      setHalls(d.halls);
       setOptionsByItem(d.options);
       setLoading(false);
       return;
@@ -1325,6 +1548,7 @@ function NewOrderView({
         setCategories(res.categories);
         setItems(res.items.filter((i) => i.is_available !== false));
         setTables(res.tables);
+        setHalls(res.halls);
         setOptionsByItem(res.optionsByItem);
       })
       .catch((e) =>
@@ -1332,6 +1556,19 @@ function NewOrderView({
       )
       .finally(() => setLoading(false));
   }, [token, isPreview, menuFn]);
+
+  // Default the hall selection to whichever hall holds the most tables so the
+  // picker never opens on an empty hall.
+  useEffect(() => {
+    if (!halls.length) return;
+    setHallId((cur) => {
+      if (cur && halls.some((h) => h.id === cur)) return cur;
+      const best = halls
+        .slice()
+        .sort((a, b) => b.table_count - a.table_count)[0];
+      return best?.id ?? "";
+    });
+  }, [halls]);
 
   const visibleItems =
     activeCat === "all"
@@ -1485,6 +1722,8 @@ function NewOrderView({
             token,
             order_type: orderType,
             table_number: orderType === "dine_in" ? Number(tableNo) : undefined,
+            // The same number can exist in several halls, so pin the hall.
+            hall_id: orderType === "dine_in" ? hallId : undefined,
             customer_name: orderType === "delivery" ? custName : undefined,
             customer_phone: orderType === "delivery" ? custPhone : undefined,
             customer_address: orderType === "delivery" ? custAddr : undefined,
@@ -1576,21 +1815,18 @@ function NewOrderView({
             </div>
 
             {orderType === "dine_in" && (
-              <div className="flex items-center gap-2">
-                {tables.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setTableNo(String(t.table_number))}
-                    className={`w-10 h-10 rounded-xl text-sm font-bold border transition-all ${
-                      tableNo === String(t.table_number)
-                        ? "bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)] shadow-md"
-                        : "bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--primary)]/60 hover:text-[var(--foreground)]"
-                    }`}
-                  >
-                    {t.table_number}
-                  </button>
-                ))}
-              </div>
+              <HallTablePicker
+                halls={halls}
+                tables={tables}
+                hallId={hallId}
+                onHallChange={(id) => {
+                  setHallId(id);
+                  setTableNo("");
+                }}
+                value={tableNo}
+                onChange={setTableNo}
+                tx={tx}
+              />
             )}
 
             {orderType === "delivery" && (

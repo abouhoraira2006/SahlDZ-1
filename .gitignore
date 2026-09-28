@@ -28,6 +28,7 @@ telegram-driver-bot.mjs
 firestore.rules
 invoice-SahlDZ.pdf
 *.txt
+!desktop/resources/sumatra/README.txt
 
 # Local Netlify folder
 .netlify
@@ -35,3 +36,10 @@ invoice-SahlDZ.pdf
 # Local emulator data and exports (regenerable via seed scripts)
 firebase-emulator-data/
 firebase-export-*/
+
+# Local dev scratch: emulator-only test helpers and runtime artifacts
+dev-server.pid
+/main.js
+/seed-test-data.mjs
+/test-permissions.mjs
+/test-permissions.ps1

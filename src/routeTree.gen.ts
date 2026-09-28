@@ -64,6 +64,8 @@ import { Route as AccountSettingsIndexRouteImport } from './routes/account.setti
 import { Route as AccountSettingsAppearanceRouteImport } from './routes/account.settings.appearance'
 import { Route as AccountSettingsDeliveryRouteImport } from './routes/account.settings.delivery'
 import { Route as AccountSettingsEmployeesRouteImport } from './routes/account.settings.employees'
+import { Route as AccountSettingsHallsRouteImport } from './routes/account.settings.halls'
+import { Route as AccountSettingsKitchensRouteImport } from './routes/account.settings.kitchens'
 import { Route as AccountSettingsRestaurantRouteImport } from './routes/account.settings.restaurant'
 import { Route as AccountSettingsTakeawayRouteImport } from './routes/account.settings.takeaway'
 import { Route as AccountSettingsWelcomeRouteImport } from './routes/account.settings.welcome'
@@ -71,6 +73,8 @@ import { Route as DashboardSettingsIndexRouteImport } from './routes/dashboard.s
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard.settings.appearance'
 import { Route as DashboardSettingsDeliveryRouteImport } from './routes/dashboard.settings.delivery'
 import { Route as DashboardSettingsEmployeesRouteImport } from './routes/dashboard.settings.employees'
+import { Route as DashboardSettingsHallsRouteImport } from './routes/dashboard.settings.halls'
+import { Route as DashboardSettingsKitchensRouteImport } from './routes/dashboard.settings.kitchens'
 import { Route as DashboardSettingsRestaurantRouteImport } from './routes/dashboard.settings.restaurant'
 import { Route as DashboardSettingsTakeawayRouteImport } from './routes/dashboard.settings.takeaway'
 import { Route as DashboardSettingsWelcomeRouteImport } from './routes/dashboard.settings.welcome'
@@ -354,6 +358,16 @@ const AccountSettingsEmployeesRoute =
     path: '/employees',
     getParentRoute: () => AccountSettingsRoute,
   } as any)
+const AccountSettingsHallsRoute = AccountSettingsHallsRouteImport.update({
+  id: '/halls',
+  path: '/halls',
+  getParentRoute: () => AccountSettingsRoute,
+} as any)
+const AccountSettingsKitchensRoute = AccountSettingsKitchensRouteImport.update({
+  id: '/kitchens',
+  path: '/kitchens',
+  getParentRoute: () => AccountSettingsRoute,
+} as any)
 const AccountSettingsRestaurantRoute =
   AccountSettingsRestaurantRouteImport.update({
     id: '/restaurant',
@@ -391,6 +405,17 @@ const DashboardSettingsEmployeesRoute =
   DashboardSettingsEmployeesRouteImport.update({
     id: '/employees',
     path: '/employees',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsHallsRoute = DashboardSettingsHallsRouteImport.update({
+  id: '/halls',
+  path: '/halls',
+  getParentRoute: () => DashboardSettingsRoute,
+} as any)
+const DashboardSettingsKitchensRoute =
+  DashboardSettingsKitchensRouteImport.update({
+    id: '/kitchens',
+    path: '/kitchens',
     getParentRoute: () => DashboardSettingsRoute,
   } as any)
 const DashboardSettingsRestaurantRoute =
@@ -477,12 +502,16 @@ export interface FileRoutesByFullPath {
   '/account/settings/appearance': typeof AccountSettingsAppearanceRoute
   '/account/settings/delivery': typeof AccountSettingsDeliveryRoute
   '/account/settings/employees': typeof AccountSettingsEmployeesRoute
+  '/account/settings/halls': typeof AccountSettingsHallsRoute
+  '/account/settings/kitchens': typeof AccountSettingsKitchensRoute
   '/account/settings/restaurant': typeof AccountSettingsRestaurantRoute
   '/account/settings/takeaway': typeof AccountSettingsTakeawayRoute
   '/account/settings/welcome': typeof AccountSettingsWelcomeRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/delivery': typeof DashboardSettingsDeliveryRoute
   '/dashboard/settings/employees': typeof DashboardSettingsEmployeesRoute
+  '/dashboard/settings/halls': typeof DashboardSettingsHallsRoute
+  '/dashboard/settings/kitchens': typeof DashboardSettingsKitchensRoute
   '/dashboard/settings/restaurant': typeof DashboardSettingsRestaurantRoute
   '/dashboard/settings/takeaway': typeof DashboardSettingsTakeawayRoute
   '/dashboard/settings/welcome': typeof DashboardSettingsWelcomeRoute
@@ -541,12 +570,16 @@ export interface FileRoutesByTo {
   '/account/settings/appearance': typeof AccountSettingsAppearanceRoute
   '/account/settings/delivery': typeof AccountSettingsDeliveryRoute
   '/account/settings/employees': typeof AccountSettingsEmployeesRoute
+  '/account/settings/halls': typeof AccountSettingsHallsRoute
+  '/account/settings/kitchens': typeof AccountSettingsKitchensRoute
   '/account/settings/restaurant': typeof AccountSettingsRestaurantRoute
   '/account/settings/takeaway': typeof AccountSettingsTakeawayRoute
   '/account/settings/welcome': typeof AccountSettingsWelcomeRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/delivery': typeof DashboardSettingsDeliveryRoute
   '/dashboard/settings/employees': typeof DashboardSettingsEmployeesRoute
+  '/dashboard/settings/halls': typeof DashboardSettingsHallsRoute
+  '/dashboard/settings/kitchens': typeof DashboardSettingsKitchensRoute
   '/dashboard/settings/restaurant': typeof DashboardSettingsRestaurantRoute
   '/dashboard/settings/takeaway': typeof DashboardSettingsTakeawayRoute
   '/dashboard/settings/welcome': typeof DashboardSettingsWelcomeRoute
@@ -611,12 +644,16 @@ export interface FileRoutesById {
   '/account/settings/appearance': typeof AccountSettingsAppearanceRoute
   '/account/settings/delivery': typeof AccountSettingsDeliveryRoute
   '/account/settings/employees': typeof AccountSettingsEmployeesRoute
+  '/account/settings/halls': typeof AccountSettingsHallsRoute
+  '/account/settings/kitchens': typeof AccountSettingsKitchensRoute
   '/account/settings/restaurant': typeof AccountSettingsRestaurantRoute
   '/account/settings/takeaway': typeof AccountSettingsTakeawayRoute
   '/account/settings/welcome': typeof AccountSettingsWelcomeRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/delivery': typeof DashboardSettingsDeliveryRoute
   '/dashboard/settings/employees': typeof DashboardSettingsEmployeesRoute
+  '/dashboard/settings/halls': typeof DashboardSettingsHallsRoute
+  '/dashboard/settings/kitchens': typeof DashboardSettingsKitchensRoute
   '/dashboard/settings/restaurant': typeof DashboardSettingsRestaurantRoute
   '/dashboard/settings/takeaway': typeof DashboardSettingsTakeawayRoute
   '/dashboard/settings/welcome': typeof DashboardSettingsWelcomeRoute
@@ -682,12 +719,16 @@ export interface FileRouteTypes {
     | '/account/settings/appearance'
     | '/account/settings/delivery'
     | '/account/settings/employees'
+    | '/account/settings/halls'
+    | '/account/settings/kitchens'
     | '/account/settings/restaurant'
     | '/account/settings/takeaway'
     | '/account/settings/welcome'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/delivery'
     | '/dashboard/settings/employees'
+    | '/dashboard/settings/halls'
+    | '/dashboard/settings/kitchens'
     | '/dashboard/settings/restaurant'
     | '/dashboard/settings/takeaway'
     | '/dashboard/settings/welcome'
@@ -746,12 +787,16 @@ export interface FileRouteTypes {
     | '/account/settings/appearance'
     | '/account/settings/delivery'
     | '/account/settings/employees'
+    | '/account/settings/halls'
+    | '/account/settings/kitchens'
     | '/account/settings/restaurant'
     | '/account/settings/takeaway'
     | '/account/settings/welcome'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/delivery'
     | '/dashboard/settings/employees'
+    | '/dashboard/settings/halls'
+    | '/dashboard/settings/kitchens'
     | '/dashboard/settings/restaurant'
     | '/dashboard/settings/takeaway'
     | '/dashboard/settings/welcome'
@@ -815,12 +860,16 @@ export interface FileRouteTypes {
     | '/account/settings/appearance'
     | '/account/settings/delivery'
     | '/account/settings/employees'
+    | '/account/settings/halls'
+    | '/account/settings/kitchens'
     | '/account/settings/restaurant'
     | '/account/settings/takeaway'
     | '/account/settings/welcome'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/delivery'
     | '/dashboard/settings/employees'
+    | '/dashboard/settings/halls'
+    | '/dashboard/settings/kitchens'
     | '/dashboard/settings/restaurant'
     | '/dashboard/settings/takeaway'
     | '/dashboard/settings/welcome'
@@ -1242,6 +1291,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountSettingsEmployeesRouteImport
       parentRoute: typeof AccountSettingsRoute
     }
+    '/account/settings/halls': {
+      id: '/account/settings/halls'
+      path: '/halls'
+      fullPath: '/account/settings/halls'
+      preLoaderRoute: typeof AccountSettingsHallsRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
+    '/account/settings/kitchens': {
+      id: '/account/settings/kitchens'
+      path: '/kitchens'
+      fullPath: '/account/settings/kitchens'
+      preLoaderRoute: typeof AccountSettingsKitchensRouteImport
+      parentRoute: typeof AccountSettingsRoute
+    }
     '/account/settings/restaurant': {
       id: '/account/settings/restaurant'
       path: '/restaurant'
@@ -1291,6 +1354,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsEmployeesRouteImport
       parentRoute: typeof DashboardSettingsRoute
     }
+    '/dashboard/settings/halls': {
+      id: '/dashboard/settings/halls'
+      path: '/halls'
+      fullPath: '/dashboard/settings/halls'
+      preLoaderRoute: typeof DashboardSettingsHallsRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/kitchens': {
+      id: '/dashboard/settings/kitchens'
+      path: '/kitchens'
+      fullPath: '/dashboard/settings/kitchens'
+      preLoaderRoute: typeof DashboardSettingsKitchensRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
     '/dashboard/settings/restaurant': {
       id: '/dashboard/settings/restaurant'
       path: '/restaurant'
@@ -1333,6 +1410,8 @@ interface DashboardSettingsRouteChildren {
   DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
   DashboardSettingsDeliveryRoute: typeof DashboardSettingsDeliveryRoute
   DashboardSettingsEmployeesRoute: typeof DashboardSettingsEmployeesRoute
+  DashboardSettingsHallsRoute: typeof DashboardSettingsHallsRoute
+  DashboardSettingsKitchensRoute: typeof DashboardSettingsKitchensRoute
   DashboardSettingsRestaurantRoute: typeof DashboardSettingsRestaurantRoute
   DashboardSettingsTakeawayRoute: typeof DashboardSettingsTakeawayRoute
   DashboardSettingsWelcomeRoute: typeof DashboardSettingsWelcomeRoute
@@ -1343,6 +1422,8 @@ const DashboardSettingsRouteChildren: DashboardSettingsRouteChildren = {
   DashboardSettingsAppearanceRoute: DashboardSettingsAppearanceRoute,
   DashboardSettingsDeliveryRoute: DashboardSettingsDeliveryRoute,
   DashboardSettingsEmployeesRoute: DashboardSettingsEmployeesRoute,
+  DashboardSettingsHallsRoute: DashboardSettingsHallsRoute,
+  DashboardSettingsKitchensRoute: DashboardSettingsKitchensRoute,
   DashboardSettingsRestaurantRoute: DashboardSettingsRestaurantRoute,
   DashboardSettingsTakeawayRoute: DashboardSettingsTakeawayRoute,
   DashboardSettingsWelcomeRoute: DashboardSettingsWelcomeRoute,
@@ -1455,6 +1536,8 @@ interface AccountSettingsRouteChildren {
   AccountSettingsAppearanceRoute: typeof AccountSettingsAppearanceRoute
   AccountSettingsDeliveryRoute: typeof AccountSettingsDeliveryRoute
   AccountSettingsEmployeesRoute: typeof AccountSettingsEmployeesRoute
+  AccountSettingsHallsRoute: typeof AccountSettingsHallsRoute
+  AccountSettingsKitchensRoute: typeof AccountSettingsKitchensRoute
   AccountSettingsRestaurantRoute: typeof AccountSettingsRestaurantRoute
   AccountSettingsTakeawayRoute: typeof AccountSettingsTakeawayRoute
   AccountSettingsWelcomeRoute: typeof AccountSettingsWelcomeRoute
@@ -1465,6 +1548,8 @@ const AccountSettingsRouteChildren: AccountSettingsRouteChildren = {
   AccountSettingsAppearanceRoute: AccountSettingsAppearanceRoute,
   AccountSettingsDeliveryRoute: AccountSettingsDeliveryRoute,
   AccountSettingsEmployeesRoute: AccountSettingsEmployeesRoute,
+  AccountSettingsHallsRoute: AccountSettingsHallsRoute,
+  AccountSettingsKitchensRoute: AccountSettingsKitchensRoute,
   AccountSettingsRestaurantRoute: AccountSettingsRestaurantRoute,
   AccountSettingsTakeawayRoute: AccountSettingsTakeawayRoute,
   AccountSettingsWelcomeRoute: AccountSettingsWelcomeRoute,

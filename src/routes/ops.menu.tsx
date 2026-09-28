@@ -42,6 +42,11 @@ import { Switch } from "@/components/ui/switch";
 import { uploadImageWithFallback } from "@/lib/image-upload";
 import { MenuImportDialog } from "@/components/menu-import-dialog";
 import { uploadImageToGithub } from "@/lib/github-storage.functions";
+import {
+  defaultKitchen,
+  loadKitchensSnapshot,
+  type Kitchen,
+} from "@/lib/kitchens";
 
 export const Route = createFileRoute("/ops/menu")({
   beforeLoad: requireOpsAccess("menu"),
@@ -53,6 +58,8 @@ type Category = {
   name: string;
   display_order: number;
   image_url: string | null;
+  /** Kitchen that cooks this category; null routes it to the main kitchen. */
+  kitchen_id?: string | null;
 };
 
 type MenuItem = {
@@ -61,6 +68,8 @@ type MenuItem = {
   description: string | null;
   price: number;
   category_id: string | null;
+  /** Optional per-item kitchen override; wins over the category's kitchen. */
+  kitchen_id?: string | null;
   image_url: string | null;
   is_available: boolean;
 };
@@ -107,6 +116,15 @@ function OpsMenu() {
   const [catDelete, setCatDelete] = useState<Category | null>(null);
   const [catImage, setCatImage] = useState<File | null>(null);
   const [catImagePreview, setCatImagePreview] = useState<string | null>(null);
+  /** Kitchens available as a routing target for this category. */
+  const [kitchens, setKitchens] = useState<Kitchen[]>([]);
+  /** Real (persisted) kitchens — the synthetic default is not selectable. */
+  const realKitchens = useMemo(
+    () => kitchens.filter((k) => k.id !== "default"),
+    [kitchens],
+  );
+  /** Empty string = the default kitchen. */
+  const [catKitchen, setCatKitchen] = useState("");
 
   const [itemOpen, setItemOpen] = useState(false);
   const [itemEditing, setItemEditing] = useState<MenuItem | null>(null);
@@ -114,6 +132,8 @@ function OpsMenu() {
   const [itemDesc, setItemDesc] = useState("");
   const [itemPrice, setItemPrice] = useState("");
   const [itemCat, setItemCat] = useState("");
+  /** Optional kitchen override for this one dish; "" follows the category. */
+  const [itemKitchen, setItemKitchen] = useState("");
   const [itemAvailable, setItemAvailable] = useState(true);
   const [itemImage, setItemImage] = useState<File | null>(null);
   const [itemImagePreview, setItemImagePreview] = useState<string | null>(null);
@@ -126,12 +146,12 @@ function OpsMenu() {
     const [catsRes, itsRes] = await Promise.all([
       supabase
         .from("categories")
-        .select("id, name, display_order, image_url")
+        .select("id, name, display_order, image_url, kitchen_id")
         .eq("restaurant_id", rid),
       supabase
         .from("menu_items")
         .select(
-          "id, name, description, price, category_id, image_url, is_available",
+          "id, name, description, price, category_id, kitchen_id, image_url, is_available",
         )
         .eq("restaurant_id", rid),
     ]);
@@ -145,6 +165,11 @@ function OpsMenu() {
     );
     setCategories(sorted as Category[]);
     setItems(its as MenuItem[]);
+    // Kitchens drive where a category's tickets get printed. A failure here is
+    // not fatal: the category editor simply falls back to the main kitchen.
+    loadKitchensSnapshot(rid)
+      .then((kk) => setKitchens(kk.kitchens))
+      .catch(() => setKitchens([defaultKitchen()]));
     setLoading(false);
   };
 
@@ -208,6 +233,7 @@ function OpsMenu() {
     setCatName("");
     setCatImage(null);
     setCatImagePreview(null);
+    setCatKitchen("");
     setCatOpen(true);
   };
   const openCatEdit = (c: Category) => {
@@ -215,6 +241,7 @@ function OpsMenu() {
     setCatName(c.name);
     setCatImage(null);
     setCatImagePreview(c.image_url);
+    setCatKitchen(c.kitchen_id ?? "");
     setCatOpen(true);
   };
   const saveCat = async () => {
@@ -241,7 +268,7 @@ function OpsMenu() {
       if (catEditing) {
         const { error } = await supabase
           .from("categories")
-          .update({ name, image_url: imageUrl })
+          .update({ name, image_url: imageUrl, kitchen_id: catKitchen || null })
           .eq("id", catEditing.id);
         if (error) throw error;
         toast.success("تم تعديل الفئة");
@@ -251,6 +278,7 @@ function OpsMenu() {
           name,
           display_order: categories.length,
           image_url: imageUrl,
+          kitchen_id: catKitchen || null,
         });
         if (error) throw error;
         toast.success("تمت إضافة الفئة");
@@ -290,6 +318,7 @@ function OpsMenu() {
     setItemDesc("");
     setItemPrice("");
     setItemCat(categories[0]?.id ?? "");
+    setItemKitchen("");
     setItemAvailable(true);
     setItemImage(null);
     setItemImagePreview(null);
@@ -310,6 +339,7 @@ function OpsMenu() {
     setItemDesc(it.description ?? "");
     setItemPrice(String(it.price));
     setItemCat(it.category_id ?? "");
+    setItemKitchen(it.kitchen_id ?? "");
     setItemAvailable(it.is_available !== false);
     setItemImage(null);
     setItemImagePreview(it.image_url);
@@ -349,6 +379,7 @@ function OpsMenu() {
             description: itemDesc.trim() || null,
             price,
             category_id: itemCat || null,
+            kitchen_id: itemKitchen || null,
             is_available: itemAvailable,
             image_url: imageUrl,
           })
@@ -362,6 +393,7 @@ function OpsMenu() {
           description: itemDesc.trim() || null,
           price,
           category_id: itemCat || null,
+          kitchen_id: itemKitchen || null,
           is_available: itemAvailable,
           image_url: imageUrl,
         });
@@ -616,6 +648,44 @@ function OpsMenu() {
               />
             </div>
             <div>
+              <Label>{tx("المطبخ المسؤول")}</Label>
+              <Select
+                value={catKitchen || "__main__"}
+                onValueChange={(v) => setCatKitchen(v === "__main__" ? "" : v)}
+              >
+                <SelectTrigger dir="rtl">
+                  <SelectValue placeholder={tx("المطبخ الرئيسي")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__main__">
+                    {tx("المطبخ الرئيسي (افتراضي)")}
+                  </SelectItem>
+                  {realKitchens.map((k) => (
+                    <SelectItem key={k.id} value={k.id}>
+                      {k.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {tx(
+                  "كل أصناف هذه الفئة تُحضّر في هذا المطبخ وتُطبع على طابعته. غيّرها من صفحة المطابخ.",
+                )}
+              </p>
+              {realKitchens.length === 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                  {tx("لا توجد مطابخ بعد — أنشئ مطبخاً من")}{" "}
+                  <a
+                    href="/account/settings/kitchens"
+                    className="underline font-medium"
+                  >
+                    {tx("إعدادات المطابخ")}
+                  </a>{" "}
+                  {tx("لتظهر هنا في الخيارات.")}
+                </p>
+              )}
+            </div>
+            <div>
               <Label>{tx("صورة الفئة (اختياري)")}</Label>
               <input
                 type="file"
@@ -701,6 +771,30 @@ function OpsMenu() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            {/* A dish can legitimately go to another station than the rest of
+                its category — one grilled item inside a "mains" category, for
+                example. Empty means "follow the category". */}
+            <div>
+              <Label>{tx("مطبخ مختلف عن الفئة (اختياري)")}</Label>
+              <Select
+                value={itemKitchen || "__cat__"}
+                onValueChange={(v) => setItemKitchen(v === "__cat__" ? "" : v)}
+              >
+                <SelectTrigger dir="rtl">
+                  <SelectValue placeholder={tx("حسب الفئة")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__cat__">
+                    {tx("حسب الفئة (الافتراضي)")}
+                  </SelectItem>
+                  {realKitchens.map((k) => (
+                    <SelectItem key={k.id} value={k.id}>
+                      {k.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>{tx("صورة الصنف (اختياري)")}</Label>

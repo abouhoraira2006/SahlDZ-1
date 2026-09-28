@@ -207,6 +207,27 @@ function normalizeValue(v: any): any {
   return v;
 }
 
+/**
+ * Firestore rejects the whole write when a field is `undefined`
+ * ("Unsupported field value: undefined"). Optional form fields that were left
+ * blank often arrive as `undefined`, so drop those keys before writing instead
+ * of failing the save. Nested objects/arrays are cleaned recursively.
+ */
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((v) => stripUndefined(v)) as unknown as T;
+  }
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value as Record<string, any>)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefined(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 function compareValues(x: any, y: any): number {
   const a = normalizeValue(x);
   const b = normalizeValue(y);
@@ -328,7 +349,8 @@ async function executeFilterChain(
   }
 }
 
-function makeUpdateChain(db: any, table: string, data: any) {
+function makeUpdateChain(db: any, table: string, rawData: any) {
+  const data = stripUndefined(rawData);
   const pendingFilters: Array<{ op: string; field: string; value: any }> = [];
 
   const chain: any = {
@@ -559,7 +581,8 @@ function firestoreQueryChain(table: string, _builder: any): any {
       return chain;
     },
     select: () => chain,
-    insert: (data: any) => {
+    insert: (rawData: any) => {
+      const data = stripUndefined(rawData);
       const doInsert = async () => {
         if (Array.isArray(data)) {
           const docs: any[] = [];

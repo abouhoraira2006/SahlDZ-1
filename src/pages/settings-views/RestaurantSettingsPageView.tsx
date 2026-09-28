@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { uploadImageWithFallback } from "@/lib/image-upload";
 
 
 
@@ -37,12 +38,18 @@ export function RestaurantSettingsPageView() {
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
-              setR(parsed);
+              setR({
+                 ...parsed,
+                 logo_url: parsed.logo_url ?? null,
+                 google_maps_review_url: parsed.google_maps_review_url ?? null,
+               });
               setName(parsed.name ?? "");
               setGUrl(parsed.google_maps_review_url ?? "");
-              setLogoPreview(parsed.logo_url);
-            } catch {}
-          } else {
+               setLogoPreview(parsed.logo_url);
+             } catch (e) {
+               console.error("restore restaurant", e);
+             }
+           } else {
             setR({
               id: "mock-id",
               name: "مطعم السهل",
@@ -66,11 +73,17 @@ export function RestaurantSettingsPageView() {
           if (saved) {
             try {
               const parsed = JSON.parse(saved);
-              setR(parsed);
+              setR({
+                 ...parsed,
+                 logo_url: parsed.logo_url ?? null,
+                 google_maps_review_url: parsed.google_maps_review_url ?? null,
+               });
               setName(parsed.name ?? "");
               setGUrl(parsed.google_maps_review_url ?? "");
               setLogoPreview(parsed.logo_url);
-            } catch {}
+            } catch (e) {
+              console.error("restore restaurant", e);
+            }
           }
           setLoading(false);
           return;
@@ -104,24 +117,24 @@ export function RestaurantSettingsPageView() {
     }
     setSaving(true);
     try {
-      let logoUrl = r.logo_url;
-      let logoWarning = false;
+      let logoUrl: string | null = r.logo_url ?? null;
+      let logoWarning: string | null = null;
       if (logoFile) {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(",")[1] ?? "");
-          };
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(logoFile);
-        });
-        const ext = (logoFile.name.split(".").pop() || "png").toLowerCase();
+        const ext = (logoFile.name.split(".").pop() || "jpg")
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "") || "jpg";
         const path = `${r.id}/logo-${Date.now()}.${ext}`;
-        const dataUrl = `data:${logoFile.type || "image/png"};base64,${base64}`;
-        const up = await supabase.storage.from("restaurant-logos").upload(path, dataUrl);
-        if (up.error) logoWarning = true;
-        else logoUrl = up.data?.url ?? logoUrl;
+        const up = await uploadImageWithFallback(
+          "restaurant-logos",
+          path,
+          logoFile,
+        );
+        logoUrl = up.url;
+        if (up.stored === "inline") {
+          logoWarning =
+            up.warning ??
+            "خدمة تخزين الصور غير مُفعّلة على Firebase — تم حفظ الشعار داخل قاعدة البيانات مباشرة.";
+        }
       }
       const { data: updated, error } = await supabase
         .from("restaurants")
@@ -133,14 +146,22 @@ export function RestaurantSettingsPageView() {
         .eq("id", r.id)
         .select("id, name, logo_url, google_maps_review_url, activation_code")
         .single();
-      if (error) throw new Error(error.message || "فشل الحفظ");
-      
+      if (error) {
+        if (/not found/i.test(error.message || "")) {
+          throw new Error(
+            "لم يتم العثور على بيانات المطعم في قاعدة البيانات. أعد تحميل الصفحة وتسجيل الدخول من جديد.",
+          );
+        }
+        throw new Error(error.message || "فشل الحفظ");
+      }
+
       const updatedR = updated ?? { ...r, name: name.trim(), logo_url: logoUrl, google_maps_review_url: gUrl.trim() || null };
       setR(updatedR);
       localStorage.setItem("sahl_dz_restaurant", JSON.stringify(updatedR));
       window.dispatchEvent(new Event("restaurant-updated"));
       setLogoFile(null);
-      toast.success(logoWarning ? "تم حفظ التغييرات، لكن فشل رفع الشعار" : "تم حفظ التغييرات بنجاح");
+      if (logoWarning) toast.warning(logoWarning);
+      toast.success(logoFile ? "تم حفظ الشعار بنجاح" : "تم حفظ التغييرات بنجاح");
     } catch (e) {
       toast.error((e as Error).message || "فشل الحفظ");
     } finally {

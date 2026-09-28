@@ -20,7 +20,21 @@ import {
   staffSessionExpiry,
   effectiveStaffPermissions,
 } from "@/lib/staff-core";
+import { normalizeRoleLabel } from "@/lib/staff-permissions";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
+import { resolveKitchenId } from "@/lib/kitchens";
+
+/**
+ * True when a staff row can work a kitchen terminal: the `kitchen` permission
+ * grants it, and the legacy `role` label is accepted as a fallback for rows
+ * created before permissions existed. Mirrors the kitchen-screen auth check so
+ * the settings page lists exactly the people who can actually log in.
+ */
+function hasKitchenAccess(s: any): boolean {
+  const perms = Array.isArray(s?.permissions) ? s.permissions : [];
+  if (perms.includes("kitchen")) return true;
+  return normalizeRoleLabel(s?.role) === ROLE_KITCHEN;
+}
 
 function safeParseOptions(
   raw: any,
@@ -56,6 +70,9 @@ export async function getIndividualChefContextCore(token: string) {
 
   return {
     chefName: staffRow.name as string,
+    chefId: staffRow.id as string,
+    /** Kitchen this terminal serves; the default kitchen when unassigned. */
+    kitchenId: resolveKitchenId(staffRow.kitchen_id),
     restaurant: rest,
   };
 }
@@ -69,11 +86,32 @@ export const getIndividualChefContext = createServerFn({ method: "GET" })
     return getIndividualChefContextCore(token);
   });
 
-/** DB logic: list active orders (new + preparing) for the chef's restaurant. */
+/** Every distinct kitchen that has at least one line of the given order. */
+async function kitchensOfOrderCore(
+  db: any,
+  orderId: string,
+): Promise<string[]> {
+  const itemsSnap = await getDocs(
+    query(collection(db, "order_items"), where("order_id", "==", orderId)),
+  );
+  const ids = new Set<string>();
+  for (const d of itemsSnap.docs) {
+    ids.add(resolveKitchenId((d.data() as any).kitchen_id));
+  }
+  return [...ids];
+}
+
+/** DB logic: list active orders (new + preparing) for the chef's restaurant.
+ *
+ * The list is scoped to the chef's own kitchen: an order only surfaces here if
+ * at least one of its lines was routed to that kitchen, and the chef only sees
+ * the lines of their kitchen — never the other stations' dishes. */
 export async function individualChefListActiveCore(token: string) {
-  const { restaurantId } = await resolveStaffFromToken(token);
+  const { staffRow, restaurantId } = await resolveStaffFromToken(token);
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase غير متصل");
+
+  const kitchenId = resolveKitchenId(staffRow.kitchen_id);
 
   const snap = await getDocs(
     query(collection(db, "orders"), where("restaurant_id", "==", restaurantId)),
@@ -81,7 +119,7 @@ export async function individualChefListActiveCore(token: string) {
   const orderRows = snap.docs
     .map((d) => ({ ...d.data(), id: d.id }))
     .filter((o: any) => o.status === "new" || o.status === "preparing");
-  if (!orderRows.length) return { orders: [] };
+  if (!orderRows.length) return { orders: [], kitchenId };
 
   const ids = orderRows.map((o: any) => o.id as string);
   const tableIds = orderRows
@@ -111,30 +149,42 @@ export async function individualChefListActiveCore(token: string) {
     tableMap.set(d.id, t.table_number);
   }
 
-  const orders = orderRows.map((o: any) => ({
-    id: o.id,
-    status: o.status as string,
-    created_at: o.created_at as string,
-    acknowledged: (o.acknowledged as boolean) ?? false,
-    table_number: o.table_id ? (tableMap.get(o.table_id) ?? null) : null,
-    notes: (o.notes as string) ?? null,
-    order_type: (o.order_type as string) ?? "dine_in",
-    customer_name: (o.customer_name as string) ?? null,
-    customer_phone: (o.customer_phone as string) ?? null,
-    customer_address: (o.customer_address as string) ?? null,
-    daily_number: (o.daily_number as number) ?? null,
-    chef_id: (o.chef_id as string) ?? null,
-    chef_name: (o.chef_name as string) ?? null,
-    started_at: (o.started_at as string) ?? null,
-    items: (itemsByOrder.get(o.id) ?? []).map((it: any) => ({
-      name: it.name_snapshot as string,
-      qty: it.quantity as number,
-      note: (it.note as string) ?? null,
-      options: it.options_snapshot ? safeParseOptions(it.options_snapshot) : [],
-    })),
-  }));
+  const orders = [];
+  for (const o of orderRows as any[]) {
+    const allItems = (itemsByOrder.get(o.id) ?? []) as any[];
+    // Keep only this kitchen's lines, then drop the order entirely when none
+    // of its lines belong here — that station has nothing to cook.
+    const myItems = allItems.filter(
+      (it) => resolveKitchenId(it.kitchen_id) === kitchenId,
+    );
+    if (!myItems.length) continue;
 
-  return { orders };
+    orders.push({
+      id: o.id,
+      status: o.status as string,
+      created_at: o.created_at as string,
+      acknowledged: (o.acknowledged as boolean) ?? false,
+      table_number: o.table_id ? (tableMap.get(o.table_id) ?? null) : null,
+      notes: (o.notes as string) ?? null,
+      order_type: (o.order_type as string) ?? "dine_in",
+      customer_name: (o.customer_name as string) ?? null,
+      customer_phone: (o.customer_phone as string) ?? null,
+      customer_address: (o.customer_address as string) ?? null,
+      daily_number: (o.daily_number as number) ?? null,
+      total: (o.total as number) ?? 0,
+      chef_id: (o.chef_id as string) ?? null,
+      chef_name: (o.chef_name as string) ?? null,
+      started_at: (o.started_at as string) ?? null,
+      items: myItems.map((it: any) => ({
+        name: it.name_snapshot as string,
+        qty: it.quantity as number,
+        note: (it.note as string) ?? null,
+        options: it.options_snapshot ? safeParseOptions(it.options_snapshot) : [],
+      })),
+    });
+  }
+
+  return { orders, kitchenId };
 }
 
 export const individualChefListActive = createServerFn({ method: "GET" })
@@ -152,9 +202,10 @@ export async function individualChefStartPreparingCore(
   orderId: string,
   chefId: string,
 ) {
-  const { restaurantId } = await resolveStaffFromToken(token);
+  const { staffRow, restaurantId } = await resolveStaffFromToken(token);
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase غير متصل");
+  const kitchenId = resolveKitchenId(staffRow.kitchen_id);
 
   const orderRef = doc(db, "orders", orderId);
   const snap = await getDoc(orderRef);
@@ -162,8 +213,14 @@ export async function individualChefStartPreparingCore(
   const data = snap.data();
   if (data.restaurant_id !== restaurantId)
     throw new Error("طلبية مملوكة لمطعم آخر");
-  if (data.status !== "new")
+  if (data.status !== "new" && data.status !== "preparing")
     throw new Error(`حالة الطلبية "${data.status}" — لا يمكن بدء التحضير`);
+
+  // Refuse when the order holds no line for this kitchen, so a station can
+  // never claim someone else's ticket.
+  const involved = await kitchensOfOrderCore(db, orderId);
+  if (!involved.includes(kitchenId))
+    throw new Error("هذه الطلبية لا تحتوي أصنافاً خاصة بمطبخك");
 
   const chefSnap = await getDoc(doc(db, "staff", chefId));
   if (!chefSnap.exists()) throw new Error("الطاهي غير موجود");
@@ -174,12 +231,21 @@ export async function individualChefStartPreparingCore(
   if (!effectiveStaffPermissions(chefRow).includes("kitchen"))
     throw new Error("هذا الحساب ليس له صلاحية المطبخ");
 
+  // Per-kitchen progress so a two-station order is not released by one chef.
+  const kitchenStatus: Record<string, string> = {
+    ...((data.kitchen_status as Record<string, string>) ?? {}),
+  };
+  if (kitchenStatus[kitchenId] !== "ready") {
+    kitchenStatus[kitchenId] = "preparing";
+  }
+
   await updateDoc(orderRef, {
     status: "preparing",
     acknowledged: true,
     chef_id: chefRow.id as string,
     chef_name: (chefRow.name as string) ?? null,
-    started_at: new Date().toISOString(),
+    started_at: data.started_at ?? new Date().toISOString(),
+    kitchen_status: kitchenStatus,
   });
   return { ok: true };
 }
@@ -195,14 +261,17 @@ export const individualChefStartPreparing = createServerFn({ method: "POST" })
     return individualChefStartPreparingCore(token, orderId, chefId);
   });
 
-/** DB logic: chef marks order as ready. */
+/** DB logic: chef marks their kitchen's slice as ready. The order itself only
+ * flips to `ready` once every kitchen involved in it has finished, otherwise a
+ * waiter would collect a half-cooked ticket. */
 export async function individualChefMarkReadyCore(
   token: string,
   orderId: string,
 ) {
-  const { restaurantId } = await resolveStaffFromToken(token);
+  const { staffRow, restaurantId } = await resolveStaffFromToken(token);
   const db = getFirebaseDb();
   if (!db) throw new Error("Firebase غير متصل");
+  const kitchenId = resolveKitchenId(staffRow.kitchen_id);
 
   const orderRef = doc(db, "orders", orderId);
   const snap = await getDoc(orderRef);
@@ -213,8 +282,23 @@ export async function individualChefMarkReadyCore(
   if (data.status !== "preparing")
     throw new Error(`حالة الطلبية "${data.status}" — لا يمكن وضعها كجاهزة`);
 
-  await updateDoc(orderRef, { status: "ready", ready_at: new Date().toISOString() });
-  return { ok: true };
+  const involved = await kitchensOfOrderCore(db, orderId);
+  if (!involved.includes(kitchenId))
+    throw new Error("هذه الطلبية لا تحتوي أصنافاً خاصة بمطبخك");
+
+  const kitchenStatus: Record<string, string> = {
+    ...((data.kitchen_status as Record<string, string>) ?? {}),
+  };
+  kitchenStatus[kitchenId] = "ready";
+
+  const allReady = involved.every((k) => kitchenStatus[k] === "ready");
+
+  await updateDoc(orderRef, {
+    status: allReady ? "ready" : "preparing",
+    kitchen_status: kitchenStatus,
+    ...(allReady ? { ready_at: new Date().toISOString() } : {}),
+  });
+  return { ok: true, allReady };
 }
 
 export const individualChefMarkReady = createServerFn({ method: "POST" })
@@ -311,6 +395,7 @@ export async function verifyIndividualChefPinCore(chefId: string, pin: string) {
     expiresAt: staffSessionExpiry(),
     chefName: staffRow.name as string,
     chefId: staffRow.id as string,
+    kitchenId: resolveKitchenId(staffRow.kitchen_id),
     restaurant,
   };
 }
@@ -332,6 +417,8 @@ export type ChefListRow = {
   is_active: boolean;
   employee_id: string | null;
   created_at: string | null;
+  /** Kitchen this chef's terminal is bound to. */
+  kitchen_id: string;
 };
 
 async function assertOwnedKitchenStaff(
@@ -354,15 +441,21 @@ export async function listIndividualChefsCore(rid: string) {
   const rows = await supabase
     .from("staff")
     .select("*")
-    .eq("restaurant_id", rid)
-    .eq("role", ROLE_KITCHEN);
-  const chefs: ChefListRow[] = (rows.data ?? []).map((s: any) => ({
-    id: s.id,
-    name: s.name,
-    is_active: !s.frozen,
-    employee_id: s.serial ?? null,
-    created_at: s.created_at ?? null,
-  }));
+    .eq("restaurant_id", rid);
+  // `permissions` is the source of truth. The legacy `role` label is written
+  // from permission *labels* ("المطبخ") while ROLE_KITCHEN is bare ("مطبخ"),
+  // so a strict role filter would hide every staff added through the
+  // permissions UI. Fall back to the role for rows that predate permissions.
+  const chefs: ChefListRow[] = (rows.data ?? [])
+    .filter((s: any) => hasKitchenAccess(s))
+    .map((s: any) => ({
+      id: s.id,
+      name: s.name,
+      is_active: !s.frozen,
+      employee_id: s.serial ?? null,
+      created_at: s.created_at ?? null,
+      kitchen_id: resolveKitchenId(s.kitchen_id),
+    }));
   chefs.sort((a, b) => String(a.name).localeCompare(String(b.name), "ar"));
   return { chefs };
 }
@@ -371,6 +464,7 @@ export async function addIndividualChefCore(
   rid: string,
   rawName: string,
   rawPin: string,
+  rawKitchenId?: string | null,
 ) {
   if (!rawName?.trim()) throw new Error("اكتب اسم الطاهي");
   const cleanPin = rawPin?.trim() ?? "";
@@ -385,8 +479,24 @@ export async function addIndividualChefCore(
     pin_changed: false,
     frozen: false,
     freeze_reason: null,
+    kitchen_id: resolveKitchenId(rawKitchenId),
     created_at: new Date().toISOString(),
   });
+  if (error) throw new Error(error.message);
+  return { ok: true };
+}
+
+/** Binds (or unbinds) a chef's terminal to a kitchen. */
+export async function setIndividualChefKitchenCore(
+  rid: string,
+  chefId: string,
+  rawKitchenId?: string | null,
+) {
+  await assertOwnedKitchenStaff(rid, chefId);
+  const { error } = await supabase
+    .from("staff")
+    .update({ kitchen_id: resolveKitchenId(rawKitchenId) })
+    .eq("id", chefId);
   if (error) throw new Error(error.message);
   return { ok: true };
 }
@@ -443,10 +553,19 @@ export const listIndividualChefs = createServerFn({ method: "GET" }).handler(
 );
 
 export const addIndividualChef = createServerFn({ method: "POST" })
-  .validator((d: { name: string; pin: string }) => d)
+  .validator(
+    (d: { name: string; pin: string; kitchen_id?: string | null }) => d,
+  )
   .handler(async ({ data }) => {
     const rid = await requireRestaurantId(getRequestHeader("authorization"));
-    return addIndividualChefCore(rid, data.name, data.pin);
+    return addIndividualChefCore(rid, data.name, data.pin, data.kitchen_id);
+  });
+
+export const setIndividualChefKitchen = createServerFn({ method: "POST" })
+  .validator((d: { chefId: string; kitchen_id?: string | null }) => d)
+  .handler(async ({ data }) => {
+    const rid = await requireRestaurantId(getRequestHeader("authorization"));
+    return setIndividualChefKitchenCore(rid, data.chefId, data.kitchen_id);
   });
 
 export const updateIndividualChefPin = createServerFn({ method: "POST" })
