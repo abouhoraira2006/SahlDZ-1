@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // DEMO MODE: fully open (development/preview posture).
+    // The web + server functions read/write as unauthenticated callers
+    // (public QR menu, order placement). Lock down before production.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
