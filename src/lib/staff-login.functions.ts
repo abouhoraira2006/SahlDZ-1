@@ -6,6 +6,7 @@ import {
   makeStaffSessionToken,
   staffSessionExpiry,
 } from "@/lib/staff-core";
+import { recordStaffLoginAttendance } from "@/lib/attendance.functions";
 
 export type PublicStaffItem = {
   id: string;
@@ -92,6 +93,13 @@ export async function verifyStaffPinCore(staffId: string, pin: string) {
     name: "",
     logo_url: null,
   };
+
+  // Record initial login attendance for today
+  await recordStaffLoginAttendance(
+    staffRow.restaurant_id,
+    staffRow.id,
+    staffRow.name as string,
+  );
 
   return {
     token: await makeStaffSessionToken(staffRow.id),

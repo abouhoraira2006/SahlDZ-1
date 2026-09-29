@@ -23,6 +23,7 @@ import {
 import { normalizeRoleLabel } from "@/lib/staff-permissions";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
 import { resolveKitchenId } from "@/lib/kitchens";
+import { recordStaffActionAttendance } from "@/lib/attendance.functions";
 
 /**
  * True when a staff row can work a kitchen terminal: the `kitchen` permission
@@ -247,6 +248,33 @@ export async function individualChefStartPreparingCore(
     started_at: data.started_at ?? new Date().toISOString(),
     kitchen_status: kitchenStatus,
   });
+
+  // Calculate dishes prepared by chef and record confirmed attendance
+  try {
+    const itemsSnap = await getDocs(
+      query(collection(db, "order_items"), where("order_id", "==", orderId)),
+    );
+    let dishesCount = 0;
+    for (const d of itemsSnap.docs) {
+      const it = d.data();
+      if (!it.kitchen_id || it.kitchen_id === kitchenId) {
+        dishesCount += Math.max(1, Number(it.quantity) || 1);
+      }
+    }
+    if (dishesCount === 0 && itemsSnap.docs.length > 0) {
+      dishesCount = itemsSnap.docs.reduce(
+        (s, d) => s + Math.max(1, Number(d.data().quantity) || 1),
+        0,
+      );
+    }
+    await recordStaffActionAttendance(restaurantId, chefRow.id as string, {
+      dishes: dishesCount || 1,
+      orders: 1,
+    });
+  } catch (err) {
+    console.error("[chef] Failed to record attendance action:", err);
+  }
+
   return { ok: true };
 }
 

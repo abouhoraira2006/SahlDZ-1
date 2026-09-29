@@ -54,7 +54,10 @@ import { formatDZD } from "@/lib/restaurant";
 import { isPreviewToken, PREVIEW_RESTAURANT } from "@/lib/preview-mode";
 import { tx } from "@/lib/ops-tx";
 import { clearKioskRole } from "@/lib/kiosk-session";
-import { hasUnifiedStaffSessionEver } from "@/lib/staff-session";
+import {
+  hasUnifiedStaffSessionEver,
+  loadUnifiedStaffSession,
+} from "@/lib/staff-session";
 import { StaffTabs } from "@/components/staff-tabs";
 
 export const Route = createFileRoute("/cashier")({
@@ -410,8 +413,14 @@ function Page() {
         }
         outcome = { orderId: order.id, mode, paid, debt, discount };
       } else {
+        const staffSession = loadUnifiedStaffSession();
         const res = await markFn({
-          data: { token, orderIds: [order.id], payment },
+          data: {
+            token,
+            orderIds: [order.id],
+            payment,
+            staffId: staffSession?.staffId || undefined,
+          },
         });
         outcome = res.outcomes[0];
       }

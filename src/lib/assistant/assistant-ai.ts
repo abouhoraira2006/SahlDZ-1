@@ -5,12 +5,12 @@ type AiConfig = { provider: string; apiKey: string; model: string };
 
 function readConfig(): AiConfig {
   if (typeof process === "undefined" || !process.env) {
-    return { provider: "gemini", apiKey: "", model: "gemini-3.6-flash" };
+    return { provider: "gemini", apiKey: "", model: "gemini-3.5-flash" };
   }
   return {
-    provider: process.env.SAHLDZ_AI_PROVIDER || "gemini",
-    apiKey: process.env.SAHLDZ_AI_API_KEY || "",
-    model: process.env.SAHLDZ_AI_MODEL || "gemini-3.6-flash",
+    provider: (process.env.SAHLDZ_AI_PROVIDER || "gemini").trim(),
+    apiKey: (process.env.SAHLDZ_AI_API_KEY || "").trim(),
+    model: (process.env.SAHLDZ_AI_MODEL || "gemini-3.5-flash").trim(),
   };
 }
 

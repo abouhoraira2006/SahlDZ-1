@@ -99,17 +99,19 @@ async function fetchMenu(restaurantId: string) {
     supabase
       .from("categories")
       .select("id,name,display_order,kitchen_id")
-      .eq("restaurant_id", restaurantId)
-      .order("display_order", { ascending: true }),
+      .eq("restaurant_id", restaurantId),
     supabase
       .from("menu_items")
-      .select("id,name,description,price,category_id,kitchen_id,image_url,is_available")
-      .eq("restaurant_id", restaurantId)
-      .order("created_at", { ascending: true }),
+      .select(
+        "id,name,description,price,category_id,kitchen_id,image_url,is_available,created_at",
+      )
+      .eq("restaurant_id", restaurantId),
   ]);
   if (catRes.error) throw new Error(catRes.error.message);
   if (itemRes.error) throw new Error(itemRes.error.message);
-  const categories = (catRes.data ?? []) as PublicCategory[];
+  const categories = ((catRes.data ?? []) as PublicCategory[]).sort(
+    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
+  );
 
   // Resolve routing once so a public order is split per kitchen exactly like
   // a cashier order is.
@@ -117,16 +119,30 @@ async function fetchMenu(restaurantId: string) {
   for (const c of categories) {
     if (c.kitchen_id) catKitchen.set(c.id, c.kitchen_id);
   }
-  const items = (itemRes.data ?? []) as PublicMenuItem[];
+  const items = (itemRes.data ?? []) as (PublicMenuItem & { created_at?: string })[];
   for (const i of items) {
     i.kitchen_id = resolveLineKitchen({
       item_kitchen_id: i.kitchen_id,
       category_kitchen_id: catKitchen.get(i.category_id ?? ""),
     });
   }
-  const { optionsByItem } = await getMenuOptionsForItemsCore(
-    items.map((i) => i.id),
-  );
+
+  // Sort items safely in memory (by created_at if present, or by name)
+  items.sort((a, b) => {
+    const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (tA && tB) return tA - tB;
+    return (a.name || "").localeCompare(b.name || "", "ar");
+  });
+
+  let optionsByItem: Record<string, MenuOption[]> = {};
+  try {
+    const optRes = await getMenuOptionsForItemsCore(items.map((i) => i.id));
+    optionsByItem = optRes.optionsByItem ?? {};
+  } catch (err) {
+    console.error("[fetchMenu] optionsByItem error:", err);
+  }
+
   return {
     categories,
     items,

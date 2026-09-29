@@ -148,12 +148,17 @@ export function PublicMenuPage({
 
   const availableItems = useMemo(() => {
     if (!menu) return [];
-    return menu.items.filter((i) => i.is_available !== false);
+    return menu.items.filter((i) => {
+      if (i.is_available === false || (i as any).is_available === "false") return false;
+      return true;
+    });
   }, [menu]);
 
   const itemsByCategory = useMemo(() => {
     if (activeCategory === "all") return availableItems;
-    return availableItems.filter((i) => i.category_id === activeCategory);
+    return availableItems.filter(
+      (i) => String(i.category_id ?? "").trim() === String(activeCategory).trim(),
+    );
   }, [availableItems, activeCategory]);
 
   const cartCount = cart.reduce((s, l) => s + l.qty, 0);

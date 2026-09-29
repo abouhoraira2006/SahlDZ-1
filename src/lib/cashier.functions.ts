@@ -19,6 +19,7 @@ import {
   createOrderForRestaurantCore,
   type NewOrderInput,
 } from "@/lib/order-create";
+import { recordStaffActionAttendance } from "@/lib/attendance.functions";
 
 export type {
   OrderMenuItem as CashierMenuItem,
@@ -396,6 +397,7 @@ export async function cashierMarkPaidCore(
   token: string,
   orderIds: string[],
   payment?: CashierPaymentInput,
+  staffId?: string,
 ): Promise<{ ok: true; outcomes: CashierPaymentOutcome[] }> {
   const restaurantId = await resolveCashierRestaurantId(token);
   const db = getFirebaseDb();
@@ -423,21 +425,33 @@ export async function cashierMarkPaidCore(
     });
     outcomes.push({ orderId, ...breakdown! });
   }
+
+  if (staffId && restaurantId && outcomes.length > 0) {
+    await recordStaffActionAttendance(restaurantId, staffId, {
+      orders: outcomes.length,
+    });
+  }
+
   return { ok: true, outcomes };
 }
 
 export const cashierMarkPaid = createServerFn({ method: "POST" })
   .validator(
-    (d: { token: string; orderIds: string[]; payment?: CashierPaymentInput }) =>
-      d,
-  )
-  .handler(async ({ data }) => {
-    const { token, orderIds, payment } = data as {
+    (d: {
       token: string;
       orderIds: string[];
       payment?: CashierPaymentInput;
+      staffId?: string;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const { token, orderIds, payment, staffId } = data as {
+      token: string;
+      orderIds: string[];
+      payment?: CashierPaymentInput;
+      staffId?: string;
     };
-    return cashierMarkPaidCore(token, orderIds, payment);
+    return cashierMarkPaidCore(token, orderIds, payment, staffId);
   });
 
 export const cashierLogout = createServerFn({ method: "POST" })

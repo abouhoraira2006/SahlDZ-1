@@ -20,6 +20,7 @@ import {
   effectiveStaffPermissions,
 } from "@/lib/staff-core";
 import { requireRestaurantId } from "@/lib/server-staff-auth";
+import { recordStaffActionAttendance } from "@/lib/attendance.functions";
 import {
   fetchMenuForRestaurantCore,
   createOrderForRestaurantCore,
@@ -268,6 +269,23 @@ export async function waiterMarkServedCore(token: string, orderId: string) {
     served_at: new Date().toISOString(),
     status: "served",
   });
+
+  try {
+    const itemsSnap = await getDocs(
+      query(collection(db, "order_items"), where("order_id", "==", orderId)),
+    );
+    const dishesCount = itemsSnap.docs.reduce(
+      (s, d) => s + Math.max(1, Number(d.data().quantity) || 1),
+      0,
+    );
+    await recordStaffActionAttendance(restaurantId, staffId, {
+      dishes: dishesCount || 1,
+      orders: 1,
+    });
+  } catch (err) {
+    console.error("[waiter] Failed to record attendance action:", err);
+  }
+
   return { ok: true };
 }
 

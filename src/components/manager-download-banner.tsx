@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, Monitor, Smartphone, BellRing } from "lucide-react";
 import { isEmbeddedWebView } from "@/lib/device";
 
-const DESKTOP_URL = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.01/SahlDZ-Setup-1.0.0.exe";
+const DESKTOP_URL = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.01/SahlDZ-Setup-1.0.1.exe";
 const APK_URL = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.0.0/sahldz-v1.2.0.apk";
 
 // Always-visible banner for the manager's post-login overview page (/ops).

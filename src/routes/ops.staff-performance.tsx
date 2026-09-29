@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireOpsAccess } from "@/lib/permissions";
-import { TrendingUp, Users, UtensilsCrossed, Trash2, Loader2, Filter } from "lucide-react";
+import { TrendingUp, Users, UtensilsCrossed, Trash2, Loader2, Filter, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurantId, formatDZD } from "@/lib/restaurant";
 import { Card } from "@/components/ui/card";
@@ -22,6 +22,8 @@ type StaffPerf = {
   id: string;
   name: string;
   role: string;
+  days_present: number;
+  dishes_count: number;
   orders_served: number;
   orders_prepared: number;
   avg_prep_min: number | null;
@@ -126,14 +128,37 @@ function OpsStaffPerformance() {
         }
       }
 
+      // 5. Get attendance & dishes per staff
+      const { data: attendanceRows } = await supabase
+        .from("staff_attendance")
+        .select("staff_id, date, status, dishes_count")
+        .eq("restaurant_id", restaurantId)
+        .gte("date", from)
+        .lte("date", to);
+
+      const attendanceByStaff = new Map<string, { daysPresent: number; totalDishes: number }>();
+      for (const a of attendanceRows ?? []) {
+        const sid = (a as any).staff_id;
+        if (!sid) continue;
+        const prev = attendanceByStaff.get(sid) ?? { daysPresent: 0, totalDishes: 0 };
+        if (a.status === "confirmed" || a.status === "checked_in") {
+          prev.daysPresent++;
+        }
+        prev.totalDishes += Number(a.dishes_count) || 0;
+        attendanceByStaff.set(sid, prev);
+      }
+
       const result: StaffPerf[] = (staffRows ?? []).map((s: any) => {
         const name = s.name as string;
         const waste = wasteByStaff.get(name) ?? { count: 0, cost: 0 };
         const prep = prepByStaff.get(s.id as string);
+        const att = attendanceByStaff.get(s.id as string) ?? { daysPresent: 0, totalDishes: 0 };
         return {
           id: s.id,
           name,
           role: s.role ?? "",
+          days_present: att.daysPresent,
+          dishes_count: att.totalDishes,
           orders_served: servedCounts.get(s.id) ?? 0,
           orders_prepared: prep?.count ?? 0,
           avg_prep_min: prep && prep.count > 0 ? prep.totalSec / prep.count / 60 : null,
@@ -142,12 +167,14 @@ function OpsStaffPerformance() {
         };
       });
 
-      result.sort((a, b) => b.orders_served - a.orders_served);
+      result.sort((a, b) => b.dishes_count - a.dishes_count || b.orders_served - a.orders_served);
       setStaff(result);
       setLoading(false);
     })();
     return () => { cancel = true; };
   }, [restaurantId, from, to]);
+
+  const totalDishes = staff.reduce((s, st) => s + st.dishes_count, 0);
 
   return (
     <div className="p-2 space-y-4" dir="rtl">
@@ -168,15 +195,20 @@ function OpsStaffPerformance() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid gap-3 grid-cols-3">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         <Card className="p-3 text-center">
           <Users className="w-4 h-4 mx-auto text-[var(--primary)] mb-1" />
           <div className="text-xs text-[var(--muted-foreground)]">{tx("عدد الموظفين")}</div>
           <div className="text-lg font-bold">{staff.length}</div>
         </Card>
         <Card className="p-3 text-center">
+          <UtensilsCrossed className="w-4 h-4 mx-auto text-emerald-600 mb-1" />
+          <div className="text-xs text-[var(--muted-foreground)]">{tx("إجمالي الأطباق المنجزة")}</div>
+          <div className="text-lg font-bold text-emerald-600">{totalDishes}</div>
+        </Card>
+        <Card className="p-3 text-center">
           <UtensilsCrossed className="w-4 h-4 mx-auto text-blue-500 mb-1" />
-          <div className="text-xs text-[var(--muted-foreground)]">{tx("إجمالي الطلبات المُقدّمة")}</div>
+          <div className="text-xs text-[var(--muted-foreground)]">{tx("الطلبات المُقدّمة")}</div>
           <div className="text-lg font-bold">{staff.reduce((s, st) => s + st.orders_served, 0)}</div>
         </Card>
         <Card className="p-3 text-center">
@@ -203,6 +235,8 @@ function OpsStaffPerformance() {
                 <TableRow>
                   <TableHead className="text-xs">{tx("الموظف")}</TableHead>
                   <TableHead className="text-xs">{tx("الدور")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("أيام الحضور")}</TableHead>
+                  <TableHead className="text-xs text-left">{tx("الأطباق المنجزة")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("طلبات مُقدّمة")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("طلبات حضّرها")}</TableHead>
                   <TableHead className="text-xs text-left">{tx("متوسط وقت التحضير")}</TableHead>
@@ -218,6 +252,19 @@ function OpsStaffPerformance() {
                       <Badge variant="secondary" className={`text-[10px] ${ROLE_COLORS[s.role] ?? ""}`}>
                         {s.role}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-left tabular-nums">
+                      <span className="font-semibold text-emerald-600">{s.days_present}</span> {tx("يوم")}
+                    </TableCell>
+                    <TableCell className="text-xs font-bold text-left tabular-nums text-[var(--primary)]">
+                      {s.dishes_count > 0 ? (
+                        <span className="flex items-center gap-1 justify-end">
+                          <UtensilsCrossed className="w-3 h-3" />
+                          {s.dishes_count}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell className="text-xs font-bold text-left tabular-nums">{s.orders_served}</TableCell>
                     <TableCell className="text-xs font-bold text-left tabular-nums">

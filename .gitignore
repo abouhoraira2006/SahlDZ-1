@@ -30,6 +30,11 @@ invoice-SahlDZ.pdf
 *.txt
 !desktop/resources/sumatra/README.txt
 
+# لوحة المالك — ملف محلي بلا بوابة دخول، فيه مفاتيح Firebase واتصال كامل بالبيانات
+Docs/sahldz-owner-console.html
+service-account*.json
+*-service-account*.json
+
 # Local Netlify folder
 .netlify
 

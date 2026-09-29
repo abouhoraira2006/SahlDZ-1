@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { requireOpsAccess, useAreaPermission } from "@/lib/permissions";
@@ -12,6 +12,8 @@ import {
   ToggleRight,
   Image as ImageIcon,
   Sparkles,
+  UploadCloud,
+  Camera,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -125,6 +127,8 @@ function OpsMenu() {
   );
   /** Empty string = the default kitchen. */
   const [catKitchen, setCatKitchen] = useState("");
+  const catFileRef = useRef<HTMLInputElement | null>(null);
+  const catCameraRef = useRef<HTMLInputElement | null>(null);
 
   const [itemOpen, setItemOpen] = useState(false);
   const [itemEditing, setItemEditing] = useState<MenuItem | null>(null);
@@ -138,6 +142,8 @@ function OpsMenu() {
   const [itemImage, setItemImage] = useState<File | null>(null);
   const [itemImagePreview, setItemImagePreview] = useState<string | null>(null);
   const [itemSaving, setItemSaving] = useState(false);
+  const itemFileRef = useRef<HTMLInputElement | null>(null);
+  const itemCameraRef = useRef<HTMLInputElement | null>(null);
   const [itemDelete, setItemDelete] = useState<MenuItem | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -382,6 +388,7 @@ function OpsMenu() {
             kitchen_id: itemKitchen || null,
             is_available: itemAvailable,
             image_url: imageUrl,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", itemEditing.id);
         if (error) throw error;
@@ -396,6 +403,8 @@ function OpsMenu() {
           kitchen_id: itemKitchen || null,
           is_available: itemAvailable,
           image_url: imageUrl,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
         if (error) throw error;
         toast.success("تمت إضافة الصنف");
@@ -686,20 +695,66 @@ function OpsMenu() {
               )}
             </div>
             <div>
-              <Label>{tx("صورة الفئة (اختياري)")}</Label>
+              <Label className="text-sm font-medium">{tx("صورة الفئة (اختياري)")}</Label>
               <input
+                ref={catFileRef}
                 type="file"
                 accept="image/*"
+                className="hidden"
                 onChange={(e) => setCatImage(e.target.files?.[0] ?? null)}
-                className="text-sm"
               />
-              {catImagePreview && (
-                <img
-                  src={catImagePreview}
-                  alt=""
-                  className="mt-2 w-20 h-20 rounded-lg object-cover"
-                />
-              )}
+              <input
+                ref={catCameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => setCatImage(e.target.files?.[0] ?? null)}
+              />
+              <div className="mt-2 flex flex-col gap-2">
+                {catImagePreview ? (
+                  <div className="relative group w-24 h-24 rounded-xl border border-input overflow-hidden shadow-sm bg-muted">
+                    <img
+                      src={catImagePreview}
+                      alt="معاينة الفئة"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCatImage(null);
+                        setCatImagePreview(null);
+                      }}
+                      className="absolute top-1 left-1 bg-destructive text-white rounded-full p-1 shadow hover:bg-destructive/90 transition-colors"
+                      title={tx("إزالة الصورة")}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => catFileRef.current?.click()}
+                  >
+                    <UploadCloud className="w-4 h-4 text-primary" />
+                    {catImagePreview ? tx("تغيير الصورة") : tx("اختر من الجهاز")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => catCameraRef.current?.click()}
+                  >
+                    <Camera className="w-4 h-4 text-primary" />
+                    {tx("التقاط بالكاميرا")}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -797,20 +852,66 @@ function OpsMenu() {
               </Select>
             </div>
             <div>
-              <Label>{tx("صورة الصنف (اختياري)")}</Label>
+              <Label className="text-sm font-medium">{tx("صورة الصنف (اختياري)")}</Label>
               <input
+                ref={itemFileRef}
                 type="file"
                 accept="image/*"
+                className="hidden"
                 onChange={(e) => setItemImage(e.target.files?.[0] ?? null)}
-                className="text-sm"
               />
-              {itemImagePreview && (
-                <img
-                  src={itemImagePreview}
-                  alt=""
-                  className="mt-2 w-20 h-20 rounded-lg object-cover"
-                />
-              )}
+              <input
+                ref={itemCameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => setItemImage(e.target.files?.[0] ?? null)}
+              />
+              <div className="mt-2 flex flex-col gap-2">
+                {itemImagePreview ? (
+                  <div className="relative group w-24 h-24 rounded-xl border border-input overflow-hidden shadow-sm bg-muted">
+                    <img
+                      src={itemImagePreview}
+                      alt="معاينة الصنف"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItemImage(null);
+                        setItemImagePreview(null);
+                      }}
+                      className="absolute top-1 left-1 bg-destructive text-white rounded-full p-1 shadow hover:bg-destructive/90 transition-colors"
+                      title={tx("إزالة الصورة")}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => itemFileRef.current?.click()}
+                  >
+                    <UploadCloud className="w-4 h-4 text-primary" />
+                    {itemImagePreview ? tx("تغيير الصورة") : tx("اختر من الجهاز")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => itemCameraRef.current?.click()}
+                  >
+                    <Camera className="w-4 h-4 text-primary" />
+                    {tx("التقاط بالكاميرا")}
+                  </Button>
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Switch

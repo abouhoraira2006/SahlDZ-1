@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>سهل Sahl DZ — مخطط المنظومة والخدمات</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      width: 1920px;
+      height: 1080px;
+      background: radial-gradient(circle at 50% 30%, #1a1e29 0%, #0d1117 70%, #07090d 100%);
+      color: #f0f6fc;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 40px 60px 30px 60px;
+    }
+
+    /* Decorative background glowing orbs */
+    .glow-bg {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .glow-gold {
+      width: 650px;
+      height: 650px;
+      background: rgba(212, 168, 83, 0.12);
+      top: 20%;
+      left: 32%;
+    }
+    .glow-blue {
+      width: 450px;
+      height: 450px;
+      background: rgba(59, 130, 246, 0.08);
+      bottom: 5%;
+      right: 5%;
+    }
+    .glow-emerald {
+      width: 450px;
+      height: 450px;
+      background: rgba(16, 185, 129, 0.08);
+      top: 5%;
+      left: 5%;
+    }
+
+    /* Header */
+    header {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 20px;
+    }
+
+    .brand-block {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo-badge {
+      width: 60px;
+      height: 60px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #D4A853 0%, #b8862d 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 25px rgba(212, 168, 83, 0.35);
+      font-size: 32px;
+      font-weight: 900;
+      color: #12151b;
+    }
+
+    .brand-title h1 {
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #ffffff 0%, #e2e8f0 70%, #D4A853 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-title p {
+      font-size: 16px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .platforms-pill {
+      display: flex;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 18px;
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
+    }
+
+    .platform-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+    .platform-item span.dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #D4A853;
+    }
+
+    /* Main Grid Layout */
+    .ecosystem-container {
+      position: relative;
+      z-index: 2;
+      flex: 1;
+      display: grid;
+      grid-template-columns: 380px 1fr 380px;
+      gap: 35px;
+      align-items: center;
+      margin: 20px 0;
+    }
+
+    /* Service Cards (Side Columns) */
+    .column-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: rgba(22, 27, 34, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 16px 20px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 4px;
+      height: 100%;
+      background: #D4A853;
+      opacity: 0.8;
+    }
+
+    .card-emerald::before { background: #10b981; }
+    .card-blue::before { background: #3b82f6; }
+    .card-purple::before { background: #8b5cf6; }
+    .card-amber::before { background: #f59e0b; }
+
+    .icon-box {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .icon-box svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .card-text h3 {
+      font-size: 17px;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-bottom: 3px;
+    }
+
+    .card-text p {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.4;
+      font-weight: 600;
+    }
+
+    /* Central Hub Monitor Screen */
+    .center-hub {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .hub-title {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .hub-title .badge {
+      display: inline-block;
+      background: rgba(212, 168, 83, 0.15);
+      border: 1px solid rgba(212, 168, 83, 0.4);
+      color: #D4A853;
+      padding: 4px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .hub-title h2 {
+      font-size: 26px;
+      font-weight: 900;
+      color: #ffffff;
+    }
+
+    .mockup-frame {
+      width: 100%;
+      background: #1e2430;
+      border-radius: 20px;
+      padding: 12px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(212, 168, 83, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .screen-content {
+      background: #0f131a;
+      border-radius: 14px;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .mock-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+    }
+
+    .mock-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .metric-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .metric-card .label {
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .metric-card .val {
+      font-size: 20px;
+      font-weight: 900;
+      color: #f8fafc;
+      margin-top: 2px;
+    }
+    .metric-card .sub {
+      font-size: 11px;
+      color: #10b981;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .mock-chart-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 14px;
+    }
+
+    .mock-chart-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .mock-chart-box h4 {
+      font-size: 13px;
+      color: #cbd5e1;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    /* Footer Banner */
+    footer {
+      position: relative;
+      z-index: 2;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-features {
+      display: flex;
+      gap: 28px;
+    }
+
+    .footer-feat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+    .footer-feat svg {
+      width: 18px;
+      height: 18px;
+      color: #D4A853;
+    }
+
+    .footer-cta {
+      font-size: 15px;
+      font-weight: 800;
+      color: #D4A853;
+      background: rgba(212, 168, 83, 0.1);
+      border: 1px solid rgba(212, 168, 83, 0.3);
+      padding: 6px 18px;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-bg glow-gold"></div>
+  <div class="glow-bg glow-blue"></div>
+  <div class="glow-bg glow-emerald"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand-block">
+      <div class="logo-badge">س</div>
+      <div class="brand-title">
+        <h1>سهل Sahl DZ</h1>
+        <p>المنظومة السحابية والمكتبية المتكاملة لإدارة المطاعم ونقاط البيع في الجزائر</p>
+      </div>
+    </div>
+    <div class="platforms-pill">
+      <div class="platform-item"><span class="dot"></span> تطبيق كمبيوتر Windows</div>
+      <div class="platform-item"><span class="dot"></span> تطبيق أندرويد APK</div>
+      <div class="platform-item"><span class="dot"></span> سحابة الويب Cloud SaaS</div>
+      <div class="platform-item"><span class="dot"></span> تطبيق PWA بدون تثبيت</div>
+    </div>
+  </header>
+
+  <!-- Ecosystem Main Area -->
+  <div class="ecosystem-container">
+    <!-- Right Column (Customer & Floor Operations) -->
+    <div class="column-cards">
+      <!-- Feature 1 -->
+      <div class="feature-card card-amber">
+        <div class="icon-box" style="background: rgba(245, 158, 11, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>شاشة الكاشير السريعة (POS)</h3>
+          <p>تسجيل الطلبات، حساب الفواتير، تقرير الإغلاق اليومي Z-Report، والطباعة الحرارية الفورية.</p>
+        </div>
+      </div>
+
+      <!-- Feature 2 -->
+      <div class="feature-card card-blue">
+        <div class="icon-box" style="background: rgba(59, 130, 246, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>منيو الـ QR الذكي للطاولات</h3>
+          <p>مسح الكود بكاميرا الهاتف والطلب الذاتي الفوري، مع تحديث فوري للأطباق غير المتوفرة.</p>
+        </div>
+      </div>
+
+      <!-- Feature 3 -->
+      <div class="feature-card card-emerald">
+        <div class="icon-box" style="background: rgba(16, 185, 129, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>شاشة النادل وخدمة الصالة</h3>
+          <p>استلام الطلبات، إدارة الطاولات المشغولة، وتسليم الوجبات للزبائن بكل سلاسة وسرعة.</p>
+        </div>
+      </div>
+
+      <!-- Feature 4 -->
+      <div class="feature-card card-purple">
+        <div class="icon-box" style="background: rgba(139, 92, 246, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>الذكاء الاصطناعي (AI Menu Vision)</h3>
+          <p>قراءة المنيو الورقي بالكاميرا واستخراج الأصناف والأسعار تلقائياً بنموذج Gemini Vision.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Column (Main Control Desk Live Mockup) -->
+    <div class="center-hub">
+      <div class="hub-title">
+        <span class="badge">القلب النابض للمطعم</span>
+        <h2>لوحة تحكم الإدارة والعمليات المركزية</h2>
+      </div>
+
+      <div class="mockup-frame">
+        <div class="screen-content">
+          <!-- Mock Topbar -->
+          <div class="mock-topbar">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-weight: 900; font-size: 16px; color: #D4A853;">مطعم السهل — الفرع الرئيسي</span>
+              <span style="font-size: 11px; background: rgba(16,185,129,0.15); color: #10b981; padding: 2px 8px; border-radius: 6px; font-weight: 700;">متصل ومباشر</span>
+            </div>
+            <div style="font-size: 12px; color: #94a3b8; font-weight: 600;">اليوم: الإثنين، وردية المساء</div>
+          </div>
+
+          <!-- Mock Metrics Cards -->
+          <div class="mock-metrics">
+            <div class="metric-card">
+              <div class="label">إجمالي المبيعات اليومية</div>
+              <div class="val">235,400 دج</div>
+              <div class="sub">▲ +18.4% عن أمس</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">صافي الربح الفعلي</div>
+              <div class="val" style="color: #10b981;">89,650 دج</div>
+              <div class="sub">هامش ربح 38.1%</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">عدد الطلبات المنجزة</div>
+              <div class="val">142 طلب</div>
+              <div class="sub" style="color: #94a3b8;">متوسط: 1,650 دج</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">تنبيهات المخزون</div>
+              <div class="val" style="color: #f59e0b;">2 مواد حرجة</div>
+              <div class="sub" style="color: #f59e0b;">جبن موزاريلا، زيت</div>
+            </div>
+          </div>
+
+          <!-- Mock Chart & Channels Row -->
+          <div class="mock-chart-row">
+            <!-- Simulated Bar Chart -->
+            <div class="mock-chart-box">
+              <h4>حركة المبيعات خلال ساعات اليوم (الذروة)</h4>
+              <div style="display: flex; align-items: flex-end; gap: 14px; height: 100px; padding-top: 10px;">
+                <div style="flex: 1; height: 35%; background: rgba(212,168,83,0.3); border-radius: 4px;"></div>
+                <div style="flex: 1; height: 50%; background: rgba(212,168,83,0.4); border-radius: 4px;"></div>
+                <div style="flex: 1; height: 85%; background: rgba(212,168,83,0.85); border-radius: 4px;"></div>
+                <div style="flex: 1; height: 100%; background: #D4A853; border-radius: 4px; box-shadow: 0 0 10px rgba(212,168,83,0.4);"></div>
+                <div style="flex: 1; height: 75%; background: rgba(212,168,83,0.7); border-radius: 4px;"></div>
+                <div style="flex: 1; height: 90%; background: rgba(212,168,83,0.85); border-radius: 4px;"></div>
+                <div style="flex: 1; height: 60%; background: rgba(212,168,83,0.5); border-radius: 4px;"></div>
+              </div>
+            </div>
+
+            <!-- Channels Breakdown -->
+            <div class="mock-chart-box">
+              <h4>قنوات البيع الحية</h4>
+              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #cbd5e1;">داخل الصالة (62%)</span>
+                  <span style="font-weight: 700;">145,900 دج</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #cbd5e1;">استلام تيك أواي (23%)</span>
+                  <span style="font-weight: 700;">54,100 دج</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #cbd5e1;">توصيل ديليفري (15%)</span>
+                  <span style="font-weight: 700;">35,400 دج</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Left Column (Back of House, Kitchen & Supply) -->
+    <div class="column-cards">
+      <!-- Feature 5 -->
+      <div class="feature-card card-amber">
+        <div class="icon-box" style="background: rgba(245, 158, 11, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+            <path d="M6 13.87A8 8 0 0 1 17.9 4.14M6 13.87A8 8 0 0 0 18.06 19.8"></path>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2v20"></path>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>شاشة المطبخ (KDS) والطباعة 80mm</h3>
+          <p>توجيه تلقائي لكل صنف لمحطته المخصصة (شواء، بيتزا، مشروبات) مع طباعة تذاكر صامتة.</p>
+        </div>
+      </div>
+
+      <!-- Feature 6 -->
+      <div class="feature-card card-emerald">
+        <div class="icon-box" style="background: rgba(16, 185, 129, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+            <path d="M20 7h-7"></path>
+            <path d="M14 17H5"></path>
+            <circle cx="17" cy="17" r="3"></circle>
+            <circle cx="7" cy="7" r="3"></circle>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>هندسة الوصفات والخصم التلقائي</h3>
+          <p>ربط الوجبات بجرامات المكونات، وخصمها آلياً من المخزون فور بدء الطهي لمنع السرقة والتسريب.</p>
+        </div>
+      </div>
+
+      <!-- Feature 7 -->
+      <div class="feature-card card-blue">
+        <div class="icon-box" style="background: rgba(59, 130, 246, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>بوت تيليجرام والتوصيل الخارجي</h3>
+          <p>إشعارات فورية بكل طلب وارد، ملخص مالي يومي تلقائي الساعة 23:30، وتنسيق مع السائقين.</p>
+        </div>
+      </div>
+
+      <!-- Feature 8 -->
+      <div class="feature-card card-purple">
+        <div class="icon-box" style="background: rgba(139, 92, 246, 0.15);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <div class="card-text">
+          <h3>الأمان والـ PIN السري للموظفين</h3>
+          <p>دخول عمال الصالة والمطبخ برمز PIN سري بدون كشف الحساب الإداري، مع تجميد فوري للورديات.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Features -->
+  <footer>
+    <div class="footer-features">
+      <div class="footer-feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        عمل محلي ومكتبي مستقر بدون انقطاع
+      </div>
+      <div class="footer-feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        حساب دقيق لتكلفة الوجبات وأرباح P&L
+      </div>
+      <div class="footer-feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        تصدير سريع لتقارير Excel و PDF
+      </div>
+      <div class="footer-feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        دعم الدينار الجزائري DZD بالكامل
+      </div>
+    </div>
+    <div class="footer-cta">
+      sahldz.com | نظام سهل لإدارة المطاعم
+    </div>
+  </footer>
+</body>
+</html>

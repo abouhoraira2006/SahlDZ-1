@@ -154,16 +154,13 @@ export default function MenuPage() {
       supabase
         .from("categories")
         .select("id, name, display_order, image_url, kitchen_id")
-        .eq("restaurant_id", rid)
-        .order("display_order", { ascending: true })
-        .order("created_at", { ascending: true }),
+        .eq("restaurant_id", rid),
       supabase
         .from("menu_items")
         .select(
-          "id, name, description, price, category_id, image_url, is_available",
+          "id, name, description, price, category_id, image_url, is_available, created_at",
         )
-        .eq("restaurant_id", rid)
-        .order("created_at", { ascending: true }),
+        .eq("restaurant_id", rid),
     ]);
     if (catsRes.error) toast.error("تعذّر تحميل الفئات");
     if (itsRes.error) toast.error("تعذّر تحميل الأصناف");
@@ -172,8 +169,21 @@ export default function MenuPage() {
     loadKitchensSnapshot(rid)
       .then((kk) => setKitchens(kk.kitchens))
       .catch(() => setKitchens([defaultKitchen()]));
-    if (catsRes.data) setCategories(catsRes.data as Category[]);
-    if (itsRes.data) setItems(itsRes.data as MenuItem[]);
+    if (catsRes.data) {
+      const sortedCats = (catsRes.data as Category[]).sort(
+        (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
+      );
+      setCategories(sortedCats);
+    }
+    if (itsRes.data) {
+      const sortedItems = (itsRes.data as MenuItem[]).sort((a: any, b: any) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (tA && tB) return tA - tB;
+        return (a.name || "").localeCompare(b.name || "", "ar");
+      });
+      setItems(sortedItems);
+    }
     setLoading(false);
   };
 

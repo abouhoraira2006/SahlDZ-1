@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles, Loader2, ImagePlus, Trash2 } from "lucide-react";
+import {
+  Sparkles,
+  Loader2,
+  ImagePlus,
+  Trash2,
+  UploadCloud,
+  Camera,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +68,8 @@ export function MenuImportDialog({
   const [drafts, setDrafts] = useState<DraftCat[] | null>(null);
   const [importing, setImporting] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!file) {
@@ -275,48 +285,122 @@ export function MenuImportDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+
           <div>
-            <Label>صورة المنيو</Label>
-            <div className="mt-1 flex items-center gap-3">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="text-sm"
-              />
-              {previewUrl && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={reset}
-                >
-                  <Trash2 className="w-4 h-4 ml-1" />
-                  إزالة
-                </Button>
-              )}
-            </div>
+            <Label className="text-sm font-medium">صورة المنيو</Label>
+            
+            {!previewUrl ? (
+              <div className="mt-2 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-20 border-dashed border-2 flex flex-col items-center justify-center gap-1.5 hover:border-primary hover:bg-primary/5 transition-all text-sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <UploadCloud className="w-5 h-5 text-primary" />
+                    <span className="font-semibold">اختر صورة من الجهاز</span>
+                    <span className="text-xs text-muted-foreground">PNG, JPG, WEBP</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-20 border-dashed border-2 flex flex-col items-center justify-center gap-1.5 hover:border-primary hover:bg-primary/5 transition-all text-sm"
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    <Camera className="w-5 h-5 text-primary" />
+                    <span className="font-semibold">التقاط بالكاميرا</span>
+                    <span className="text-xs text-muted-foreground">صورة حية للمنيو المطبوع</span>
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-3">
+                <div className="relative rounded-xl border border-border p-2 bg-muted/20 flex flex-col sm:flex-row items-center gap-4">
+                  <img
+                    ref={imgRef}
+                    src={previewUrl}
+                    alt="معاينة المنيو"
+                    className="max-h-52 w-auto rounded-lg border border-input object-contain bg-[var(--muted)] shadow-sm"
+                  />
+                  <div className="flex-1 w-full space-y-2 text-center sm:text-right">
+                    <div className="text-sm font-medium truncate">
+                      {file?.name ?? "صورة المنيو المحددة"}
+                    </div>
+                    {file?.size && (
+                      <div className="text-xs text-muted-foreground">
+                        الحجم: {(file.size / (1024 * 1024)).toFixed(2)} م.ب
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start pt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        تغيير الصورة
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => cameraInputRef.current?.click()}
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        إعادة التقاط
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={reset}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        إزالة
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {!drafts && (
+                  <Button
+                    onClick={onAnalyze}
+                    disabled={parsing}
+                    size="lg"
+                    className="w-full gap-2 text-base font-semibold shadow-md bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white transition-all py-6"
+                  >
+                    {parsing ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-5 h-5" />
+                    )}
+                    {parsing ? "جارٍ تحليل المنيو بالذكاء الاصطناعي…" : "تحليل واستخراج الأصناف بالذكاء الاصطناعي"}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-
-          {previewUrl && (
-            <img
-              ref={imgRef}
-              src={previewUrl}
-              alt="منيو"
-              className="max-h-64 rounded-lg border border-input object-contain bg-[var(--muted)]"
-            />
-          )}
-
-          {previewUrl && !drafts && (
-            <Button onClick={onAnalyze} disabled={parsing} className="gap-2">
-              {parsing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <ImagePlus className="w-4 h-4" />
-              )}
-              {parsing ? "جارٍ استخراج الأطباق…" : "تحليل بالذكاء الاصطناعي"}
-            </Button>
-          )}
 
           {drafts && (
             <div className="space-y-4">

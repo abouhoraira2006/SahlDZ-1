@@ -16,6 +16,8 @@ import {
   HandCoins,
   CalendarDays,
   ArrowDownCircle,
+  TrendingUp,
+  UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -55,6 +57,10 @@ import {
   recordStaffAdvance,
   saveStaffSalary,
 } from "@/lib/payroll.functions";
+import {
+  getStaffMonthlyAttendance,
+  type StaffMonthlyAttendanceSummary,
+} from "@/lib/attendance.functions";
 import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/ops/employees/$employeeId")({
@@ -80,6 +86,7 @@ function EmployeeInfo() {
   const paySalaryFn = useServerFn(payEmployeeSalary);
   const advanceFn = useServerFn(recordStaffAdvance);
   const saveSalaryFn = useServerFn(saveStaffSalary);
+  const attendanceFn = useServerFn(getStaffMonthlyAttendance);
 
   type PayrollView = {
     salary: number | null;
@@ -89,6 +96,10 @@ function EmployeeInfo() {
   };
   const [payroll, setPayroll] = useState<PayrollView | null>(null);
   const [payLoading, setPayLoading] = useState(false);
+
+  const [attendance, setAttendance] = useState<StaffMonthlyAttendanceSummary | null>(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [showAbsentDates, setShowAbsentDates] = useState(false);
 
   const [payOpen, setPayOpen] = useState(false);
   const [payForm, setPayForm] = useState({ amount: "", method: "نقداً", notes: "" });
@@ -117,8 +128,30 @@ function EmployeeInfo() {
     }
   };
 
+  const loadAttendance = async () => {
+    if (!restaurantId) return;
+    setAttendanceLoading(true);
+    try {
+      let headers: Record<string, string> = {};
+      if (getFirebaseDb()) {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (token) headers = { Authorization: `Bearer ${token}` };
+      }
+      const res = await attendanceFn({ headers, data: { staffId: employeeId } });
+      setAttendance(res as StaffMonthlyAttendanceSummary);
+    } catch {
+      setAttendance(null);
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!restaurantLoading) void loadPayroll();
+    if (!restaurantLoading) {
+      void loadPayroll();
+      void loadAttendance();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId, restaurantId, restaurantLoading]);
 
@@ -146,6 +179,7 @@ function EmployeeInfo() {
       toast.success(tx("تم تسجيل الراتب"));
       setPayOpen(false);
       await loadPayroll();
+      await loadAttendance();
     } catch (e) {
       toast.error((e as Error).message || tx("فشل تسجيل الراتب"));
     } finally {
@@ -663,11 +697,179 @@ function EmployeeInfo() {
         )}
       </Card>
 
-      <Card className="rounded-xl border border-border bg-card p-4">
-        <h3 className="font-bold text-sm">{tx("أداء الموظف")}</h3>
-        <p className="text-xs text-[var(--muted-foreground)] mt-1">
-          {tx("قريباً: إحصاءات الطلبات والهدر مرتبطة بالموظف.")}
-        </p>
+      <Card className="rounded-xl border border-border bg-card p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-[var(--primary)]" />
+              <h3 className="font-bold text-sm">{tx("سجل الحضور وأداء الأطباق")}</h3>
+            </div>
+            <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+              {tx("متابعة حضور الموظف اليومي، أيام الغياب، وعدد الأطباق والطلبات المنجزة")}
+            </p>
+          </div>
+          {attendance && (
+            <div className="flex items-center gap-2">
+              {attendance.today_status === "confirmed" ? (
+                <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs gap-1">
+                  <BadgeCheck className="w-3.5 h-3.5" /> {tx("حاضر ومؤكد بالعمل اليوم")}
+                </Badge>
+              ) : attendance.today_status === "checked_in" ? (
+                <Badge className="bg-blue-500/10 text-blue-600 border border-blue-500/20 text-xs gap-1">
+                  <User className="w-3.5 h-3.5" /> {tx("مسجل دخول اليوم")}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[var(--muted-foreground)] text-xs gap-1">
+                  <EyeOff className="w-3.5 h-3.5" /> {tx("لم يسجل حضور اليوم")}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+
+        {attendanceLoading && !attendance ? (
+          <p className="text-xs text-[var(--muted-foreground)]">{tx("جاري تحميل بيانات الأداء والحضور…")}</p>
+        ) : attendance ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="rounded-xl bg-[var(--muted)]/40 border border-border/60 p-3">
+                <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+                  <span>{tx("أيام الحضور")}</span>
+                  <CalendarDays className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+                <div className="text-xl font-bold mt-1 text-emerald-600">
+                  {attendance.present_days_count} <span className="text-xs font-normal text-[var(--muted-foreground)]">{tx("يوم")}</span>
+                </div>
+                <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
+                  {tx("شهر")} {attendance.month}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-[var(--muted)]/40 border border-border/60 p-3">
+                <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+                  <span>{tx("أيام الغياب")}</span>
+                  <CalendarDays className="w-3.5 h-3.5 text-[var(--destructive)]" />
+                </div>
+                <div className={`text-xl font-bold mt-1 ${attendance.absent_days_count > 0 ? "text-[var(--destructive)]" : "text-[var(--muted-foreground)]"}`}>
+                  {attendance.absent_days_count} <span className="text-xs font-normal text-[var(--muted-foreground)]">{tx("يوم")}</span>
+                </div>
+                {attendance.absent_dates.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAbsentDates(!showAbsentDates)}
+                    className="text-[10px] text-[var(--destructive)] hover:underline cursor-pointer mt-0.5 block text-right font-medium"
+                  >
+                    {showAbsentDates ? tx("إخفاء التواريخ ▲") : tx("عرض تواريخ الغياب ▼")}
+                  </button>
+                ) : (
+                  <div className="text-[10px] text-emerald-600 mt-0.5">{tx("ملتزم بالكامل")}</div>
+                )}
+              </div>
+
+              <div className="rounded-xl bg-[var(--muted)]/40 border border-border/60 p-3">
+                <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+                  <span>{tx("الأطباق المنجزة")}</span>
+                  <UtensilsCrossed className="w-3.5 h-3.5 text-[var(--primary)]" />
+                </div>
+                <div className="text-xl font-bold mt-1 text-[var(--primary)]">
+                  {attendance.total_dishes} <span className="text-xs font-normal text-[var(--muted-foreground)]">{tx("طبق")}</span>
+                </div>
+                <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
+                  {tx("أطباق محضرة ومقدمة")}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-[var(--muted)]/40 border border-border/60 p-3">
+                <div className="flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+                  <span>{tx("الطلبات والخدمات")}</span>
+                  <BadgeCheck className="w-3.5 h-3.5 text-[var(--primary)]" />
+                </div>
+                <div className="text-xl font-bold mt-1">
+                  {attendance.total_orders} <span className="text-xs font-normal text-[var(--muted-foreground)]">{tx("طلب")}</span>
+                </div>
+                <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5">
+                  {tx("عمليات مكتملة")}
+                </div>
+              </div>
+            </div>
+
+            {showAbsentDates && attendance.absent_dates.length > 0 && (
+              <div className="p-3 rounded-lg border border-[var(--destructive)]/20 bg-[var(--destructive)]/5 space-y-1.5">
+                <div className="text-xs font-semibold text-[var(--destructive)] flex items-center gap-1.5">
+                  <span>⚠️</span> {tx("تواريخ أيام الغياب في هذا الشهر:")}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {attendance.absent_dates.map((d) => (
+                    <span
+                      key={d}
+                      className="px-2 py-0.5 rounded text-xs bg-card border border-[var(--destructive)]/30 font-mono text-[var(--destructive)] font-medium"
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Daily Breakdown Table for the Month */}
+            {attendance.records.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <div className="text-xs font-semibold text-[var(--muted-foreground)]">
+                  {tx("سجل النشاط اليومي لشهر")} {attendance.month}
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-xs text-right">
+                    <thead className="bg-[var(--muted)]/50 border-b border-border text-[var(--muted-foreground)]">
+                      <tr>
+                        <th className="p-2.5">{tx("التاريخ")}</th>
+                        <th className="p-2.5">{tx("الحالة")}</th>
+                        <th className="p-2.5">{tx("وقت الدخول")}</th>
+                        <th className="p-2.5">{tx("الأطباق")}</th>
+                        <th className="p-2.5">{tx("الطلبات")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {attendance.records
+                        .slice()
+                        .sort((a, b) => (b.date > a.date ? 1 : -1))
+                        .map((rec) => (
+                          <tr key={rec.id || rec.date} className="hover:bg-[var(--muted)]/30">
+                            <td className="p-2.5 font-mono">{rec.date}</td>
+                            <td className="p-2.5">
+                              {rec.status === "confirmed" ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                                  <BadgeCheck className="w-3 h-3" /> {tx("مؤكد بالعمل")}
+                                </span>
+                              ) : rec.status === "checked_in" ? (
+                                <span className="inline-flex items-center gap-1 text-blue-600 font-medium">
+                                  <User className="w-3 h-3" /> {tx("دخول فقط")}
+                                </span>
+                              ) : (
+                                <span className="text-[var(--muted-foreground)]">{tx("غائب")}</span>
+                              )}
+                            </td>
+                            <td className="p-2.5 font-mono text-[var(--muted-foreground)]">
+                              {rec.login_time ? new Date(rec.login_time).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                            </td>
+                            <td className="p-2.5 font-bold text-[var(--primary)]">
+                              {rec.dishes_count || 0}
+                            </td>
+                            <td className="p-2.5 font-medium">
+                              {rec.orders_count || 0}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            {tx("لا توجد بيانات حضور مسجلة لهذا الشهر بعد.")}
+          </p>
+        )}
       </Card>
 
       {/* Pay salary dialog */}
@@ -676,6 +878,58 @@ function EmployeeInfo() {
           <DialogHeader>
             <DialogTitle>{tx("صرف راتب")} — {member.name}</DialogTitle>
           </DialogHeader>
+
+          {attendance && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 space-y-2 text-xs">
+              <div className="flex items-center justify-between font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5 text-[var(--primary)]" />
+                  {tx("سجل الحضور والأطباق لشهر")} ({attendance.month})
+                </span>
+                <Badge variant={attendance.absent_days_count > 0 ? "destructive" : "secondary"}>
+                  {attendance.absent_days_count > 0
+                    ? `${attendance.absent_days_count} ${tx("أيام غياب")}`
+                    : tx("بدون غياب")}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                <div className="p-2 rounded-lg bg-card border border-border">
+                  <div className="text-[10px] text-[var(--muted-foreground)]">{tx("أيام الحضور")}</div>
+                  <div className="text-sm font-bold text-emerald-600 mt-0.5">
+                    {attendance.present_days_count} {tx("يوم")}
+                  </div>
+                </div>
+                <div className="p-2 rounded-lg bg-card border border-border">
+                  <div className="text-[10px] text-[var(--muted-foreground)]">{tx("أيام الغياب")}</div>
+                  <div className={`text-sm font-bold mt-0.5 ${attendance.absent_days_count > 0 ? "text-[var(--destructive)]" : "text-[var(--muted-foreground)]"}`}>
+                    {attendance.absent_days_count} {tx("يوم")}
+                  </div>
+                </div>
+                <div className="p-2 rounded-lg bg-card border border-border">
+                  <div className="text-[10px] text-[var(--muted-foreground)]">{tx("الأطباق المنجزة")}</div>
+                  <div className="text-sm font-bold text-[var(--primary)] mt-0.5 flex items-center justify-center gap-1">
+                    <UtensilsCrossed className="w-3 h-3" />
+                    {attendance.total_dishes}
+                  </div>
+                </div>
+              </div>
+
+              {attendance.absent_dates.length > 0 && (
+                <div className="text-[11px] text-[var(--muted-foreground)] pt-1 border-t border-border/50">
+                  <span className="font-semibold text-[var(--destructive)]">{tx("تواريخ الغياب:")} </span>
+                  <span className="font-mono text-[var(--foreground)]">
+                    {attendance.absent_dates.join("، ")}
+                  </span>
+                </div>
+              )}
+
+              <p className="text-[11px] text-[var(--muted-foreground)] leading-relaxed">
+                💡 {tx("يمكنك مراعاة أيام الغياب أو احتساب مكافأة على عدد الأطباق المنجزة عند تعيين مبلغ الصرف أدناه.")}
+              </p>
+            </div>
+          )}
+
           <div className="space-y-3">
             <div>
               <Label>{tx("المبلغ (دج)")}</Label>
