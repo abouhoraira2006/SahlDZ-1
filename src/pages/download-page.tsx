@@ -9,6 +9,7 @@ import {
   Shield,
   Wifi,
 } from "lucide-react";
+import { DESKTOP_DOWNLOAD_CONFIG } from "@/config/download";
 
 export default function DownloadPage() {
   useRestaurantId();
@@ -103,8 +104,8 @@ export default function DownloadPage() {
           onClick={() => {
             setDownloading(true);
             const link = document.createElement("a");
-            link.href = "https://github.com/mohammedbachir/SahlDZ/releases/download/v1.01/SahlDZ-Setup-1.0.1.exe";
-            link.download = "SahlDZ-Setup-1.0.1.exe";
+            link.href = DESKTOP_DOWNLOAD_CONFIG.url;
+            link.download = DESKTOP_DOWNLOAD_CONFIG.filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -113,7 +114,9 @@ export default function DownloadPage() {
           disabled={downloading}
           className="w-full py-3 rounded-xl bg-[#D4A853] text-[#1a1612] font-medium hover:bg-[#D4A853]/90 transition-colors disabled:opacity-50"
         >
-          {downloading ? "جاري التحميل..." : "تحميل برنامج الويندوز (1.0.1)"}
+          {downloading
+            ? "جاري التحميل..."
+            : `تحميل برنامج الويندوز (${DESKTOP_DOWNLOAD_CONFIG.version})`}
         </button>
         <div className="text-xs text-muted-foreground bg-muted/50 rounded-xl p-3">
           <p className="font-medium mb-1">خطوات التثبيت:</p>

@@ -164,8 +164,8 @@
 
 - **الموقع الرسمي:** [https://sahldz.com](https://sahldz.com)
 - **صفحة التحميل الموحدة:** [https://sahldz.com/download](https://sahldz.com/download)
-- **برنامج سطح المكتب (Windows Setup 1.0.1):**
-  `https://github.com/mohammedbachir/SahlDZ/releases/download/v1.01/SahlDZ-Setup-1.0.1.exe`
+- **برنامج سطح المكتب (Windows Setup 1.0.2):**
+  `https://github.com/mohammedbachir/SahlDZ/releases/download/v1.01/SahlDZ-Setup-1.0.2.exe`
 - **تطبيق أندرويد (Android APK 1.2.0):**
   `https://github.com/mohammedbachir/SahlDZ/releases/download/v1.0.0/sahldz-v1.2.0.apk`
 - **لوحة التحكم السحابية للمديرين:**
