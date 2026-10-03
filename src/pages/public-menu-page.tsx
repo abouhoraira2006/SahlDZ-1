@@ -13,17 +13,22 @@ import {
   User,
   UtensilsCrossed,
   X,
+  Bike,
+  MapPin,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
   getPublicOrderStatus,
   getTakeawayMenu,
   getTableMenu,
+  getDeliveryMenu,
   placeTakeawayOrder,
   placeTableOrder,
+  placeDeliveryOrder,
 } from "@/lib/public-order.functions";
 import type {
   PlaceTakeawayOrderInput,
+  PlaceDeliveryOrderInput,
   PublicMenuData,
   PublicMenuItem,
   PublicOrderTrackResult,
@@ -31,7 +36,7 @@ import type {
 import type { MenuOption, OptionChoice } from "@/lib/menu-options.functions";
 import { formatDZD } from "@/lib/restaurant";
 
-export type PublicMenuMode = "takeaway" | "dine_in";
+export type PublicMenuMode = "takeaway" | "dine_in" | "delivery";
 
 type PickGroup = { group: MenuOption; choices: OptionChoice[] };
 type CartLine = {
@@ -90,12 +95,16 @@ export function PublicMenuPage({
   const [cartOpen, setCartOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [orderNotes, setOrderNotes] = useState("");
   const [placing, setPlacing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [placed, setPlaced] = useState<PlacedResult | null>(null);
   const [track, setTrack] = useState<PublicOrderTrackResult | null>(null);
 
+  const isDelivery = mode === "delivery";
   const isTakeaway = mode === "takeaway";
+  const isDineIn = mode === "dine_in";
 
   useEffect(() => {
     if (!placed) {
@@ -126,9 +135,11 @@ export function PublicMenuPage({
     let cancelled = false;
     async function load() {
       try {
-        const data = isTakeaway
-          ? await getTakeawayMenu({ data: { token } })
-          : await getTableMenu({ data: { token } });
+        const data = isDelivery
+          ? await getDeliveryMenu({ data: { token } })
+          : isTakeaway
+            ? await getTakeawayMenu({ data: { token } })
+            : await getTableMenu({ data: { token } });
         if (!cancelled) setMenu(data);
       } catch (e) {
         if (!cancelled)
@@ -141,7 +152,7 @@ export function PublicMenuPage({
     return () => {
       cancelled = true;
     };
-  }, [token, isTakeaway]);
+  }, [token, mode]);
 
   const tableNumber = isTakeaway ? null : (menu?.tableNumber ?? null);
   const tableLabel = tableNumber != null ? `طاولة ${tableNumber}` : null;
@@ -256,7 +267,20 @@ export function PublicMenuPage({
 
   async function submitOrder() {
     if (!menu || !menu.restaurant) return;
-    if (isTakeaway && !name.trim()) {
+    if (isDelivery) {
+      if (!name.trim()) {
+        setSubmitError("اكتب اسمك ليتم تجهيز طلبك");
+        return;
+      }
+      if (!phone.trim()) {
+        setSubmitError("اكتب رقم هاتفك ليتواصل معك مسؤول التوصيل");
+        return;
+      }
+      if (!address.trim()) {
+        setSubmitError("اكتب عنوان التوصيل بالتفصيل");
+        return;
+      }
+    } else if (isTakeaway && !name.trim()) {
       setSubmitError("اكتب اسمك ليتم تجهيز طلبك");
       return;
     }
@@ -264,15 +288,28 @@ export function PublicMenuPage({
     setSubmitError(null);
     try {
       const common = { token, lines: toLines() };
-      const result = isTakeaway
-        ? await placeTakeawayOrder({
-            data: {
-              ...common,
-              customer_name: name.trim(),
-              customer_phone: phone.trim() || null,
-            } satisfies PlaceTakeawayOrderInput,
-          })
-        : await placeTableOrder({ data: common });
+      let result;
+      if (isDelivery) {
+        result = await placeDeliveryOrder({
+          data: {
+            ...common,
+            customer_name: name.trim(),
+            customer_phone: phone.trim(),
+            customer_address: address.trim(),
+            notes: orderNotes.trim() || null,
+          } satisfies PlaceDeliveryOrderInput,
+        });
+      } else if (isTakeaway) {
+        result = await placeTakeawayOrder({
+          data: {
+            ...common,
+            customer_name: name.trim(),
+            customer_phone: phone.trim() || null,
+          } satisfies PlaceTakeawayOrderInput,
+        });
+      } else {
+        result = await placeTableOrder({ data: common });
+      }
       setPlaced({
         orderId: result.orderId,
         dailyNumber: result.dailyNumber,
@@ -291,6 +328,8 @@ export function PublicMenuPage({
     setCart([]);
     setName("");
     setPhone("");
+    setAddress("");
+    setOrderNotes("");
   }
 
   if (loading) {
@@ -307,16 +346,28 @@ export function PublicMenuPage({
       <div className="min-h-dvh flex items-center justify-center bg-background px-6">
         <div className="max-w-sm w-full text-center space-y-4">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
-            <UtensilsCrossed className="w-8 h-8" />
+            {isDelivery ? (
+              <Bike className="w-8 h-8" />
+            ) : (
+              <UtensilsCrossed className="w-8 h-8" />
+            )}
           </div>
           <h1 className="text-xl font-bold text-foreground">
-            {isTakeaway ? "الطلب السريع غير متوفر" : "هذه الطاولة غير متاحة"}
+            {isDelivery
+              ? "خدمة التوصيل غير متوفرة"
+              : isTakeaway
+                ? "الطلب السريع غير متوفر"
+                : "هذه الطاولة غير متاحة"}
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
             {loadError ||
               (menu?.restaurant && !menu.enabled
-                ? "الطلب السريع معطّل حالياً عند صاحب المطعم. حاول مرة أخرى لاحقاً."
-                : "الرابط غير صالح. امسح رمز QR جديداً.")}
+                ? isDelivery
+                  ? "خدمة التوصيل معطلة حالياً لدى المطعم. يرجى التواصل مع المطعم مباشرة."
+                  : "الطلب السريع معطّل حالياً عند صاحب المطعم. حاول مرة أخرى لاحقاً."
+                : isDelivery
+                  ? "رابط التوصيل غير صالح. يرجى طلب رابط جديد من صاحب المطعم."
+                  : "الرابط غير صالح. امسح رمز QR جديداً.")}
           </p>
         </div>
       </div>
@@ -355,17 +406,23 @@ export function PublicMenuPage({
               {delivered
                 ? "تم التسليم"
                 : readyNow
-                  ? isTakeaway
-                    ? "جاهز — خذ طلبك"
-                    : "طلبك جاهز"
-                  : "تم استلام طلبك"}
+                  ? isDelivery
+                    ? "طلبك جاهز وجاري التوصيل"
+                    : isTakeaway
+                      ? "جاهز — خذ طلبك"
+                      : "طلبك جاهز"
+                  : isDelivery
+                    ? "تم استلام طلب التوصيل"
+                    : "تم استلام طلبك"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1.5">
-              {isTakeaway
-                ? "رقم طلبك عند الكاشير"
-                : tableLabel
-                  ? `رقم طلبك للطاولة ${tableNumber}`
-                  : "رقم طلبك"}
+              {isDelivery
+                ? "رقم طلبك للتوصيل"
+                : isTakeaway
+                  ? "رقم طلبك عند الكاشير"
+                  : tableLabel
+                    ? `رقم طلبك للطاولة ${tableNumber}`
+                    : "رقم طلبك"}
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-6 space-y-3">
@@ -383,6 +440,16 @@ export function PublicMenuPage({
               </span>
             </div>
           </div>
+
+          {isDelivery && address && (
+            <div className="rounded-2xl border border-border bg-card p-4 text-xs text-right space-y-1">
+              <div className="font-semibold text-foreground flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-primary" />
+                عنوان التوصيل:
+              </div>
+              <p className="text-muted-foreground leading-relaxed">{address}</p>
+            </div>
+          )}
 
           <div className="rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center">
@@ -426,16 +493,20 @@ export function PublicMenuPage({
             }`}
           >
             {notFound
-              ? "لم يتم العثور على الطلب — الصق رقمك عند الكاشير."
+              ? "لم يتم العثور على الطلب — تواصل مع المطعم برقم طلبك."
               : status === "ready"
-                ? isTakeaway
-                  ? "طلبك جاهز — توجّه إلى الكاشير واذكر رقمك لاستلامه."
-                  : "طلبك جاهز — سيُحضَر إلى طاولتك."
-                : status === "paid"
-                  ? "تم تسليم طلبك — يسرنا خدمتك."
+                ? isDelivery
+                  ? "طلبك جاهز في المطبخ ومسؤول التوصيل في طريقه إليك."
                   : isTakeaway
-                    ? "نحن نجهّزه الآن — تتحدّث هذه الصفحة تلقائياً عندما يكون جاهزاً."
-                    : "نحن نجهّزه الآن — تتحدّث هذه الصفحة تلقائياً."}
+                    ? "طلبك جاهز — توجّه إلى الكاشير واذكر رقمك لاستلامه."
+                    : "طلبك جاهز — سيُحضَر إلى طاولتك."
+                : status === "paid"
+                  ? "تم تسليم الطلب بنجاح — نتمنى لك وجبة شهية!"
+                  : isDelivery
+                    ? "طلبك قيد التحضير في المطبخ الآن — سيتم إشعارك فور خروجه للتوصيل."
+                    : isTakeaway
+                      ? "نحن نجهّزه الآن — تتحدّث هذه الصفحة تلقائياً عندما يكون جاهزاً."
+                      : "نحن نجهّزه الآن — تتحدّث هذه الصفحة تلقائياً."}
           </p>
 
           <button
@@ -473,13 +544,20 @@ export function PublicMenuPage({
                 {menu.restaurant.name}
               </h1>
               <p className="text-[11px] text-muted-foreground truncate">
-                {isTakeaway
-                  ? "اطلب بسرعة وخذ رقمك من الكاشير"
-                  : "اطلب من هاتفك ونوصله لطاولتك"}
+                {isDelivery
+                  ? "اطلب من بيتك وسنوصله حتى باب منزلك"
+                  : isTakeaway
+                    ? "اطلب بسرعة وخذ رقمك من الكاشير"
+                    : "اطلب من هاتفك ونوصله لطاولتك"}
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold text-[var(--primary)] shrink-0">
-              {isTakeaway ? (
+              {isDelivery ? (
+                <>
+                  <Bike className="w-3.5 h-3.5" />
+                  توصيل
+                </>
+              ) : isTakeaway ? (
                 <>
                   <UtensilsCrossed className="w-3.5 h-3.5" />
                   سفري
@@ -747,7 +825,7 @@ export function PublicMenuPage({
             </div>
 
             <div className="mt-5 space-y-3">
-              {isTakeaway && (
+              {(isTakeaway || isDelivery) && (
                 <>
                   <label className="block">
                     <span className="text-sm font-semibold flex items-center gap-1.5">
@@ -766,9 +844,13 @@ export function PublicMenuPage({
                     <span className="text-sm font-semibold flex items-center gap-1.5">
                       <Phone className="w-4 h-4 text-muted-foreground" />
                       رقم الهاتف
-                      <span className="text-xs text-muted-foreground font-normal">
-                        (اختياري)
-                      </span>
+                      {isDelivery ? (
+                        <span className="text-destructive">*</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground font-normal">
+                          (اختياري)
+                        </span>
+                      )}
                     </span>
                     <input
                       value={phone}
@@ -779,6 +861,38 @@ export function PublicMenuPage({
                       className="mt-1.5 w-full h-11 rounded-xl border border-border bg-card px-3 text-sm text-left"
                     />
                   </label>
+                  {isDelivery && (
+                    <>
+                      <label className="block">
+                        <span className="text-sm font-semibold flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-muted-foreground" />
+                          عنوان التوصيل بالتفصيل
+                          <span className="text-destructive">*</span>
+                        </span>
+                        <input
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="مثال: حي النور، عمارة 12، الطابق 2"
+                          className="mt-1.5 w-full h-11 rounded-xl border border-border bg-card px-3 text-sm"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-sm font-semibold flex items-center gap-1.5">
+                          <ScrollText className="w-4 h-4 text-muted-foreground" />
+                          ملاحظة للطلب أو السائق
+                          <span className="text-xs text-muted-foreground font-normal">
+                            (اختياري)
+                          </span>
+                        </span>
+                        <input
+                          value={orderNotes}
+                          onChange={(e) => setOrderNotes(e.target.value)}
+                          placeholder="مثال: بدون بصل، أو يرجى الاتصال عند الوصول"
+                          className="mt-1.5 w-full h-11 rounded-xl border border-border bg-card px-3 text-sm"
+                        />
+                      </label>
+                    </>
+                  )}
                 </>
               )}
             </div>

@@ -28,6 +28,7 @@ import { Route as WaiterLoginRouteImport } from './routes/waiter-login'
 import { Route as WaiterScreenRouteImport } from './routes/waiter-screen'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as AccountSettingsRouteImport } from './routes/account.settings'
+import { Route as DTokenRouteImport } from './routes/d.$token'
 import { Route as DashboardAnalyticsRouteImport } from './routes/dashboard.analytics'
 import { Route as DashboardDownloadRouteImport } from './routes/dashboard.download'
 import { Route as DashboardMenuRouteImport } from './routes/dashboard.menu'
@@ -174,6 +175,11 @@ const AccountIndexRoute = AccountIndexRouteImport.update({
 const AccountSettingsRoute = AccountSettingsRouteImport.update({
   id: '/account/settings',
   path: '/account/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DTokenRoute = DTokenRouteImport.update({
+  id: '/d/$token',
+  path: '/d/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardAnalyticsRoute = DashboardAnalyticsRouteImport.update({
@@ -466,6 +472,7 @@ export interface FileRoutesByFullPath {
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRouteWithChildren
+  '/d/$token': typeof DTokenRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
@@ -536,6 +543,7 @@ export interface FileRoutesByTo {
   '/staff-login': typeof StaffLoginRoute
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
+  '/d/$token': typeof DTokenRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
@@ -608,6 +616,7 @@ export interface FileRoutesById {
   '/waiter-login': typeof WaiterLoginRoute
   '/waiter-screen': typeof WaiterScreenRoute
   '/account/settings': typeof AccountSettingsRouteWithChildren
+  '/d/$token': typeof DTokenRoute
   '/dashboard/analytics': typeof DashboardAnalyticsRoute
   '/dashboard/download': typeof DashboardDownloadRoute
   '/dashboard/menu': typeof DashboardMenuRoute
@@ -683,6 +692,7 @@ export interface FileRouteTypes {
     | '/waiter-login'
     | '/waiter-screen'
     | '/account/settings'
+    | '/d/$token'
     | '/dashboard/analytics'
     | '/dashboard/download'
     | '/dashboard/menu'
@@ -753,6 +763,7 @@ export interface FileRouteTypes {
     | '/staff-login'
     | '/waiter-login'
     | '/waiter-screen'
+    | '/d/$token'
     | '/dashboard/analytics'
     | '/dashboard/download'
     | '/dashboard/menu'
@@ -824,6 +835,7 @@ export interface FileRouteTypes {
     | '/waiter-login'
     | '/waiter-screen'
     | '/account/settings'
+    | '/d/$token'
     | '/dashboard/analytics'
     | '/dashboard/download'
     | '/dashboard/menu'
@@ -898,6 +910,7 @@ export interface RootRouteChildren {
   WaiterLoginRoute: typeof WaiterLoginRoute
   WaiterScreenRoute: typeof WaiterScreenRoute
   AccountSettingsRoute: typeof AccountSettingsRouteWithChildren
+  DTokenRoute: typeof DTokenRoute
   InternalManagersRoute: typeof InternalManagersRoute
   RTokenRoute: typeof RTokenRoute
   TTokenRoute: typeof TTokenRoute
@@ -1037,6 +1050,13 @@ declare module '@tanstack/react-router' {
       path: '/account/settings'
       fullPath: '/account/settings'
       preLoaderRoute: typeof AccountSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/d/$token': {
+      id: '/d/$token'
+      path: '/d/$token'
+      fullPath: '/d/$token'
+      preLoaderRoute: typeof DTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/analytics': {
@@ -1579,6 +1599,7 @@ const rootRouteChildren: RootRouteChildren = {
   WaiterLoginRoute: WaiterLoginRoute,
   WaiterScreenRoute: WaiterScreenRoute,
   AccountSettingsRoute: AccountSettingsRouteWithChildren,
+  DTokenRoute: DTokenRoute,
   InternalManagersRoute: InternalManagersRoute,
   RTokenRoute: RTokenRoute,
   TTokenRoute: TTokenRoute,

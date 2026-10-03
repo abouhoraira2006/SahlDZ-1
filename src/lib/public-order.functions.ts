@@ -4,6 +4,7 @@ import { getFirebaseDb } from "@/integrations/firebase/config";
 import { getMenuOptionsForItemsCore } from "@/lib/menu-options.functions";
 import type { MenuOption } from "@/lib/menu-options.functions";
 import { loadMenuRouting, resolveLineKitchen } from "@/lib/kitchens";
+import { notifyDriversForOrderCore } from "@/lib/delivery-drivers.functions";
 
 export type PublicRestaurant = {
   id: string;
@@ -71,6 +72,60 @@ export const getTakeawayMenu = createServerFn({ method: "GET" })
     }
 
     const restaurant = await resolveRestaurantByTakeawayToken(token);
+    const empty: PublicMenuData = {
+      enabled: false,
+      restaurant: restaurant
+        ? {
+            id: restaurant.id,
+            name: restaurant.name,
+            logo_url: restaurant.logo_url,
+          }
+        : null,
+      categories: [],
+      items: [],
+      optionsByItem: {},
+    };
+    if (!restaurant || !restaurant.enabled) return empty;
+
+    const menu = await fetchMenu(restaurant.id);
+    return {
+      enabled: true,
+      restaurant,
+      ...menu,
+    } satisfies PublicMenuData;
+  });
+
+async function resolveRestaurantByDeliveryToken(token: string) {
+  const { data: rest } = await supabase
+    .from("restaurants")
+    .select("id,name,logo_url,delivery_enabled,delivery_link_token")
+    .eq("delivery_link_token", token)
+    .maybeSingle();
+  const r = rest as any;
+  if (!r) return null;
+  return {
+    id: r.id as string,
+    name: (r.name as string) || "مطعم",
+    logo_url: (r.logo_url as string | null) ?? null,
+    enabled: r.delivery_enabled === true,
+  };
+}
+
+export const getDeliveryMenu = createServerFn({ method: "GET" })
+  .validator((d: { token: string }) => d)
+  .handler(async ({ data }) => {
+    const { token } = data as { token: string };
+    if (!getFirebaseDb()) {
+      return {
+        enabled: false,
+        restaurant: null as PublicRestaurant | null,
+        categories: [] as PublicCategory[],
+        items: [] as PublicMenuItem[],
+        optionsByItem: {} as Record<string, MenuOption[]>,
+      } satisfies PublicMenuData;
+    }
+
+    const restaurant = await resolveRestaurantByDeliveryToken(token);
     const empty: PublicMenuData = {
       enabled: false,
       restaurant: restaurant
@@ -233,7 +288,7 @@ export type PublicOrderLine = {
 
 type PlaceOrderContext = {
   restaurantId: string;
-  orderType: "takeaway" | "dine_in";
+  orderType: "takeaway" | "dine_in" | "delivery";
   tableId?: string | null;
   tableNumber?: number | null;
 };
@@ -243,6 +298,8 @@ async function createPublicOrderCore(
   name: string,
   phone: string | null,
   lines: PublicOrderLine[],
+  address?: string | null,
+  notes?: string | null,
 ) {
   if (!lines?.length) throw new Error("أضف صنفاً واحداً على الأقل");
   if (!name) throw new Error("اكتب اسمك ليتم تجهيز طلبك");
@@ -280,8 +337,8 @@ async function createPublicOrderCore(
       order_type: ctx.orderType,
       customer_name: name,
       customer_phone: phone,
-      customer_address: null,
-      notes: null,
+      customer_address: address || null,
+      notes: notes || null,
       daily_number: dailyNumber,
       created_at: now,
     })
@@ -315,6 +372,22 @@ async function createPublicOrderCore(
     .from("order_items")
     .insert(itemRows);
   if (itemsErr) throw new Error(itemsErr.message);
+
+  if (ctx.orderType === "delivery") {
+    void notifyDriversForOrderCore({
+      restaurantId: ctx.restaurantId,
+      orderId,
+      total,
+      customerName: name || null,
+      customerPhone: phone || null,
+      customerAddress: address || null,
+      items: lines.map((l) => ({
+        name: l.name,
+        quantity: l.quantity || 1,
+      })),
+      dailyNumber,
+    });
+  }
 
   return {
     orderId,
@@ -353,6 +426,48 @@ export const placeTakeawayOrder = createServerFn({ method: "POST" })
       input.customer_name?.trim() ?? "",
       input.customer_phone?.trim() || null,
       input.lines,
+    );
+  });
+
+export type PlaceDeliveryOrderInput = {
+  token: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  notes?: string | null;
+  lines: PublicOrderLine[];
+};
+
+export const placeDeliveryOrder = createServerFn({ method: "POST" })
+  .validator((d: PlaceDeliveryOrderInput) => d)
+  .handler(async ({ data }) => {
+    const input = data as PlaceDeliveryOrderInput;
+    if (!getFirebaseDb())
+      throw new Error("Firebase غير مُعد — يُرجى تكوين الاتصال");
+
+    const restaurant = await resolveRestaurantByDeliveryToken(input.token);
+    if (!restaurant || !restaurant.enabled)
+      throw new Error("الرابط غير صالح أو نظام التوصيل معطّل");
+
+    if (!input.customer_name?.trim())
+      throw new Error("اكتب اسمك ليتم تجهيز طلبك");
+    if (!input.customer_phone?.trim())
+      throw new Error("اكتب رقم هاتفك ليتواصل معك مسؤول التوصيل");
+    if (!input.customer_address?.trim())
+      throw new Error("اكتب عنوان التوصيل بالتفصيل");
+
+    return createPublicOrderCore(
+      {
+        restaurantId: restaurant.id,
+        orderType: "delivery",
+        tableId: null,
+        tableNumber: null,
+      },
+      input.customer_name.trim(),
+      input.customer_phone.trim(),
+      input.lines,
+      input.customer_address.trim(),
+      input.notes?.trim() || null,
     );
   });
 
